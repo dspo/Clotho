@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "clotho": {
+      "url": "http://localhost:7400/mcp"
+    }
+  }
+}

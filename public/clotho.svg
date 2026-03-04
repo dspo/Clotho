@@ -1,0 +1,37 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="clothoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#clothoGrad)" />
+  <!-- Spindle / thread of fate abstraction: a stylized "C" made of flowing threads -->
+  <!-- Outer arc (thick thread) -->
+  <path
+    d="M320 148c-20-16-48-28-80-28-88 0-120 72-120 136s32 136 120 136c32 0 60-12 80-28"
+    fill="none"
+    stroke="white"
+    stroke-width="36"
+    stroke-linecap="round"
+  />
+  <!-- Middle thread - offset, thinner -->
+  <path
+    d="M340 178c-22-20-54-34-92-34-72 0-104 56-104 112s32 112 104 112c38 0 70-14 92-34"
+    fill="none"
+    stroke="rgba(255,255,255,0.5)"
+    stroke-width="16"
+    stroke-linecap="round"
+  />
+  <!-- Inner thread - smallest, creating depth -->
+  <path
+    d="M356 210c-24-22-58-38-100-38-56 0-88 44-88 84s32 84 88 84c42 0 76-16 100-38"
+    fill="none"
+    stroke="rgba(255,255,255,0.3)"
+    stroke-width="8"
+    stroke-linecap="round"
+  />
+  <!-- Small spindle dot at the center-right where threads converge -->
+  <circle cx="356" cy="256" r="16" fill="white" opacity="0.9" />
+</svg>
