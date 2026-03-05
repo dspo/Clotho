@@ -239,6 +239,7 @@ export function ListView() {
         tasks={filteredTasks}
         allTags={tags}
         groupBy={groupBy}
+        projects={projects}
         projectName={activeProject?.name}
         projectColor={activeProject?.color}
         projectColorMap={projectColorMap}

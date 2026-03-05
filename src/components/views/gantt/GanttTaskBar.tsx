@@ -1,6 +1,7 @@
 import { useCallback, useId, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { format, addDays } from 'date-fns';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import {
   BAR_HEIGHT,
   BAR_TOP_OFFSET,
@@ -10,6 +11,7 @@ import {
   type ZoomLevel,
   type TimeRange,
 } from './gantt-utils';
+import { softenHexColor } from '@/lib/color';
 import type { TaskWithTags } from '@/types/task';
 
 interface GanttTaskBarProps {
@@ -32,6 +34,13 @@ interface GanttTaskBarProps {
 }
 
 type DragMode = 'move' | 'resize-left' | 'resize-right';
+
+function truncateWithEllipsis(text: string, maxChars: number): string {
+  if (maxChars <= 1) return '…';
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, Math.max(maxChars - 1, 1)).trimEnd()}…`;
+}
+
 
 export function GanttTaskBar({
   task,
@@ -71,8 +80,12 @@ export function GanttTaskBar({
 
   const barY = y + BAR_TOP_OFFSET;
   const isDone = task.status === 'done';
-  const barColor = isDone ? '#10B981' : color;
-  const progress = isDone ? 1 : 0;
+  const isCancelled = task.status === 'cancelled';
+  const isTodo = task.status === 'todo';
+  const isInProgress = task.status === 'in_progress';
+  const isActiveStatus = isTodo || isInProgress;
+  const barColor = softenHexColor(color);
+  const gradientId = `gradient-${clipId}`;
 
   // Show name in bar if wide enough
   const showNameInBar = width >= 50;
@@ -81,6 +94,7 @@ export function GanttTaskBar({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, mode: DragMode) => {
+      if (e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
       (e.target as SVGElement).setPointerCapture(e.pointerId);
@@ -204,6 +218,11 @@ export function GanttTaskBar({
   const displayX = dragState ? dragState.currentX : x;
   const displayY = dragState && dragState.mode === 'move' ? dragState.currentY + BAR_TOP_OFFSET : barY;
   const displayWidth = dragState ? dragState.currentWidth : width;
+  const textInsetLeft = isDone || isCancelled ? 18 : 6;
+  const textInsetRight = 6;
+  const availableTextWidth = Math.max(displayWidth - textInsetLeft - textInsetRight, 0);
+  const maxChars = Math.max(4, Math.floor(availableTextWidth / 6));
+  const displayTitle = truncateWithEllipsis(task.title, maxChars);
 
   // Format dates for tooltip
   const startDateStr = task.start_date ? format(new Date(task.start_date), 'MMM d, yyyy') : 'No start';
@@ -225,6 +244,14 @@ export function GanttTaskBar({
         <clipPath id={clipId}>
           <rect x={displayX} y={displayY} width={displayWidth} height={BAR_HEIGHT} rx={4} ry={4} />
         </clipPath>
+        {/* Gradient for active status (todo/in_progress) - left to right */}
+        {isActiveStatus && (
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={barColor} stopOpacity={1} />
+            <stop offset="50%" stopColor={barColor} stopOpacity={0.9} />
+            <stop offset="100%" stopColor={barColor} stopOpacity={0.75} />
+          </linearGradient>
+        )}
       </defs>
 
       {/* Ghost bar during drag */}
@@ -262,24 +289,10 @@ export function GanttTaskBar({
         height={BAR_HEIGHT}
         rx={4}
         ry={4}
-        fill={dragState?.overUnscheduled ? '#ef4444' : barColor}
-        opacity={dragState?.overUnscheduled ? 0.3 : isDone ? 1 : 0.5}
-        className="hover:brightness-110 transition-all"
+        fill={dragState?.overUnscheduled ? '#ef4444' : isActiveStatus ? `url(#${gradientId})` : barColor}
+        opacity={dragState?.overUnscheduled ? 0.3 : 1}
+        className="hover:brightness-105 transition-all"
       />
-
-      {/* Progress bar (only for non-done; done bar is already full color) */}
-      {progress > 0 && !isDone && (
-        <rect
-          x={displayX}
-          y={displayY}
-          width={displayWidth * progress}
-          height={BAR_HEIGHT}
-          rx={4}
-          ry={4}
-          fill={barColor}
-          opacity={1}
-        />
-      )}
 
       {/* Selection border */}
       {selected && (
@@ -315,29 +328,30 @@ export function GanttTaskBar({
       {/* Task name inside bar (clipped) */}
       {showNameInBar && (
         <>
-          {/* ✓ icon for done tasks */}
-          {isDone && (
-            <text
-              x={displayX + 6}
-              y={displayY + BAR_HEIGHT / 2 + 4}
-              fontSize={11}
-              fill="#ffffff"
-              className="pointer-events-none select-none"
-              clipPath={`url(#${clipId})`}
+          {/* Status icon for done/cancelled tasks */}
+          {(isDone || isCancelled) && (
+            <foreignObject
+              x={displayX + 4}
+              y={displayY + BAR_HEIGHT / 2 - 5}
+              width={10}
+              height={10}
+              className="pointer-events-none"
             >
-              ✓
-            </text>
+              <div className="h-2.5 w-2.5 text-white">
+                {isDone ? <CheckCircle2 className="h-2.5 w-2.5" /> : <XCircle className="h-2.5 w-2.5" />}
+              </div>
+            </foreignObject>
           )}
           <text
-            x={displayX + (isDone ? 20 : 8)}
+            x={displayX + textInsetLeft}
             y={displayY + BAR_HEIGHT / 2 + 4}
-            fontSize={12}
+            fontSize={11}
             fill="#ffffff"
             className="pointer-events-none select-none"
             clipPath={`url(#${clipId})`}
-            textDecoration={isDone ? 'line-through' : undefined}
+            textDecoration={isDone || isCancelled ? 'line-through' : undefined}
           >
-            {task.title}
+            {displayTitle}
           </text>
         </>
       )}

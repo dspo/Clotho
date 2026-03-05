@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { TagChip } from '@/components/common/TagChip';
 import { DateDisplay } from '@/components/common/DateDisplay';
 import { ProgressBar } from '@/components/common/ProgressBar';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import type { TaskWithTags } from '@/types/task';
 
 interface BoardCardProps {
@@ -25,7 +25,14 @@ export function BoardCard({ task, subtasks, dimmed, onClick, onDoubleClick, isSe
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id, disabled: dimmed });
+  } = useSortable({
+    id: task.id,
+    disabled: dimmed,
+    data: {
+      type: 'Task',
+      task,
+    },
+  });
 
   const dndStyle = {
     transform: CSS.Transform.toString(transform),
@@ -67,13 +74,13 @@ export function BoardCard({ task, subtasks, dimmed, onClick, onDoubleClick, isSe
         isDragging && 'opacity-0',
         dimmed && 'pointer-events-none opacity-30',
         isDone && 'bg-green-50 dark:bg-green-950/30',
-        isCancelled && 'opacity-50',
+        isCancelled && 'bg-gray-50 dark:bg-gray-950/30',
         isSelected && 'ring-2 ring-primary',
       )}
       style={{
         ...dndStyle,
         borderLeftWidth: '3px',
-        borderLeftColor: isDone ? '#10B981' : isCancelled ? '#D1D5DB' : barColor,
+        borderLeftColor: isDone ? '#10B981' : isCancelled ? '#9CA3AF' : barColor,
       }}
     >
       <div className="px-3 py-2.5 space-y-2">
@@ -82,11 +89,14 @@ export function BoardCard({ task, subtasks, dimmed, onClick, onDoubleClick, isSe
           className={cn(
             'text-sm font-medium leading-snug line-clamp-2',
             isDone && 'line-through text-green-700 dark:text-green-400',
-            isCancelled && 'line-through text-muted-foreground',
+            isCancelled && 'line-through text-gray-500 dark:text-gray-400',
           )}
         >
           {isDone && (
             <CheckCircle2 className="inline-block h-3.5 w-3.5 mr-1 mb-0.5 text-green-500 shrink-0" />
+          )}
+          {isCancelled && (
+            <XCircle className="inline-block h-3.5 w-3.5 mr-1 mb-0.5 text-gray-400 shrink-0" />
           )}
           {task.title}
         </p>

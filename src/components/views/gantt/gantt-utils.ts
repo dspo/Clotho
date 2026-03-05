@@ -48,6 +48,7 @@ export const HEADER_HEIGHT = 48;
 export const BAR_HEIGHT = 24;
 export const BAR_TOP_OFFSET = (ROW_HEIGHT - BAR_HEIGHT) / 2; // 6
 export const MIN_BAR_WIDTH = 8;
+export const BAR_PADDING = 2; // Horizontal padding for task bars
 
 export function getGanttConfig(zoomLevel: ZoomLevel): GanttConfig {
   return {
@@ -280,9 +281,6 @@ export function getWeekendRanges(timeRange: TimeRange, colWidth: number, zoomLev
   return ranges;
 }
 
-/** Minimum horizontal gap (in pixels) between tasks on the same packed row */
-const PACK_GAP = 4;
-
 export interface PackedTask {
   task: TaskWithTags;
   barX: number;
@@ -340,46 +338,72 @@ export function packTaskRows(
       const endDatePlusOne = new Date(parseISO(effectiveEnd));
       endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
 
-      const barX = dateToX(startDate, timeRange, colWidth, zoomLevel);
-      const barEndX = dateToX(endDatePlusOne, timeRange, colWidth, zoomLevel);
+      const rawBarX = dateToX(startDate, timeRange, colWidth, zoomLevel);
+      const rawBarEndX = dateToX(endDatePlusOne, timeRange, colWidth, zoomLevel);
+      // Apply padding to create visual gap between adjacent bars
+      const barX = rawBarX + BAR_PADDING;
+      const barEndX = rawBarEndX - BAR_PADDING;
       const barWidth = Math.max(barEndX - barX, MIN_BAR_WIDTH);
 
       items.push({ task, barX, barEndX: barX + barWidth, barWidth });
     }
 
-    // Sort by barX (start position)
-    items.sort((a, b) => a.barX - b.barX);
+    // Sort by barX (start position), then by width (shorter first for better packing)
+    items.sort((a, b) => {
+      if (a.barX !== b.barX) return a.barX - b.barX;
+      return a.barWidth - b.barWidth;
+    });
 
-    // Greedy row packing within this project
-    const rowEnds: number[] = [];
+    // Row packing: each row stores a list of occupied intervals [start, end]
+    const rowIntervals: Array<Array<{ start: number; end: number }>> = [];
+
+    // Check if an item can fit in a row (no overlap with existing intervals)
+    const canFitInRow = (row: Array<{ start: number; end: number }>, itemStart: number, itemEnd: number): boolean => {
+      for (const interval of row) {
+        // Check for overlap: two intervals overlap if one doesn't end before the other starts
+        // Note: adjacent tasks (one ends where other starts) should NOT overlap
+        if (!(itemEnd <= interval.start || interval.end <= itemStart)) {
+          return false;
+        }
+      }
+      return true;
+    };
 
     for (const item of items) {
-      let placed = false;
-      for (let r = 0; r < rowEnds.length; r++) {
-        if (item.barX >= rowEnds[r] + PACK_GAP) {
-          rowEnds[r] = item.barEndX;
-          packed.push({
-            task: item.task,
-            barX: item.barX,
-            barWidth: item.barWidth,
-            packedRow: globalRowOffset + r,
-          });
-          placed = true;
+      const itemStart = item.barX;
+      const itemEnd = item.barEndX;
+      let placedRow = -1;
+
+      // Find the first row where this item fits
+      for (let r = 0; r < rowIntervals.length; r++) {
+        if (canFitInRow(rowIntervals[r], itemStart, itemEnd)) {
+          placedRow = r;
           break;
         }
       }
-      if (!placed) {
-        rowEnds.push(item.barEndX);
+
+      if (placedRow !== -1) {
+        // Place in existing row
+        rowIntervals[placedRow].push({ start: itemStart, end: itemEnd });
         packed.push({
           task: item.task,
           barX: item.barX,
           barWidth: item.barWidth,
-          packedRow: globalRowOffset + rowEnds.length - 1,
+          packedRow: globalRowOffset + placedRow,
+        });
+      } else {
+        // Create new row
+        rowIntervals.push([{ start: itemStart, end: itemEnd }]);
+        packed.push({
+          task: item.task,
+          barX: item.barX,
+          barWidth: item.barWidth,
+          packedRow: globalRowOffset + rowIntervals.length - 1,
         });
       }
     }
 
-    const scheduledRows = Math.max(rowEnds.length, MIN_PROJECT_ROWS);
+    const scheduledRows = Math.max(rowIntervals.length, MIN_PROJECT_ROWS);
     projectRowCounts.set(projectId, scheduledRows);
     globalRowOffset += scheduledRows;
   }

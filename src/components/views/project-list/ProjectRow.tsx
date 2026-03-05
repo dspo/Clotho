@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ChevronRight, Pencil, Archive, Trash2 } from 'lucide-react';
+import { ChevronRight, Pencil, Archive, Trash2, GripVertical } from 'lucide-react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -16,6 +18,7 @@ interface ProjectRowProps {
   onArchive: () => void;
   onDelete: () => void;
   onTaskClick: (taskId: string) => void;
+  isDraggable?: boolean;
 }
 
 export function ProjectRow({
@@ -26,8 +29,23 @@ export function ProjectRow({
   onArchive,
   onDelete,
   onTaskClick,
+  isDraggable = false,
 }: ProjectRowProps) {
   const [hovering, setHovering] = useState(false);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id, disabled: !isDraggable });
+
+  const dndStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   const handleRowClick = () => {
     onToggleExpand();
@@ -61,13 +79,33 @@ export function ProjectRow({
       onUnarchive={project.status === 'archived' ? onArchive : undefined}
       onDelete={onDelete}
     >
-      <div className="border-b last:border-b-0">
+      <div
+        ref={setNodeRef}
+        style={dndStyle}
+        className={cn(
+          'border-b last:border-b-0',
+          isDragging && 'opacity-50 bg-muted',
+        )}
+      >
         <div
           className="flex items-center gap-3 px-4 h-[72px] cursor-pointer transition-colors hover:bg-muted/50"
           onClick={handleRowClick}
           onMouseEnter={() => setHovering(true)}
           onMouseLeave={() => setHovering(false)}
         >
+          {/* Drag handle */}
+          {isDraggable && (
+            <button
+              type="button"
+              className="shrink-0 cursor-grab rounded p-0.5 hover:bg-muted text-muted-foreground"
+              {...attributes}
+              {...listeners}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
+
           {/* Expand arrow */}
           <button
             type="button"

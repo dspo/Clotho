@@ -4,6 +4,7 @@ import {
   Timer,
   CheckCircle2,
   XCircle,
+  CalendarOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TASK_STATUSES } from '@/lib/constants';
@@ -15,6 +16,7 @@ const STATUS_ICONS: Record<string, React.ElementType> = {
   Timer,
   CheckCircle2,
   XCircle,
+  CalendarOff,
 };
 
 interface StatusBadgeProps {

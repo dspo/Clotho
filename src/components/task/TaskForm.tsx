@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar as CalendarIcon, Clock, Plus, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Plus, X, Circle, CircleDot, CircleDashed } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -15,13 +15,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TASK_STATUSES, TASK_PRIORITIES } from '@/lib/constants';
-import type { TaskStatus, TaskPriority } from '@/types/task';
+import { TASK_STATUSES, TASK_PRIORITIES, TASK_DIFFICULTIES } from '@/lib/constants';
+import type { TaskStatus, TaskPriority, TaskDifficulty } from '@/types/task';
 import type { Tag } from '@/types/tag';
+
+const DifficultyIcons = {
+  simple: Circle,
+  medium: CircleDot,
+  complex: CircleDashed,
+} as const;
 
 export interface TaskFormValue {
   status: TaskStatus;
   priority: TaskPriority;
+  difficulty: TaskDifficulty | null;
   startDate: string | null;
   dueDate: string | null;
   tagIds: string[];
@@ -47,8 +54,8 @@ export function TaskForm({ value, onChange, allTags, showActualHours = false }: 
 
   return (
     <div className="space-y-3">
-      {/* Status + Priority */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Status + Priority + Difficulty */}
+      <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">Status</label>
           <Select value={value.status} onValueChange={(v) => onChange({ status: v as TaskStatus })}>
@@ -77,6 +84,34 @@ export function TaskForm({ value, onChange, allTags, showActualHours = false }: 
                   <PriorityBadge priority={p.value} />
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Difficulty</label>
+          <Select
+            value={value.difficulty ?? 'none'}
+            onValueChange={(v) => onChange({ difficulty: v === 'none' ? null : (v as TaskDifficulty) })}
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue placeholder="Not set" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                <span className="text-muted-foreground">Not set</span>
+              </SelectItem>
+              {TASK_DIFFICULTIES.map((d) => {
+                const Icon = DifficultyIcons[d.value];
+                return (
+                  <SelectItem key={d.value} value={d.value}>
+                    <div className="flex items-center gap-1.5">
+                      <Icon className="h-3.5 w-3.5" style={{ color: d.color }} />
+                      <span>{d.label}</span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>

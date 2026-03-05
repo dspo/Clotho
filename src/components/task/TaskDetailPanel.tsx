@@ -28,7 +28,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { useTaskStore } from '@/stores/task-store';
 import { useTagStore } from '@/stores/tag-store';
 import { taskService } from '@/services/task-service';
-import type { TaskDetail, TaskStatus, TaskPriority, DescriptionFormat } from '@/types/task';
+import type { TaskDetail, TaskStatus, TaskPriority, TaskDifficulty, DescriptionFormat } from '@/types/task';
 import { VisuallyHidden } from 'radix-ui';
 
 export function TaskDetailPanel() {
@@ -115,7 +115,7 @@ export function TaskDetailPanel() {
     saveTimerRef.current = setTimeout(() => setSaveIndicator('idle'), 2000);
   }, []);
 
-  const handleFormChange = (update: Partial<{ status: TaskStatus; priority: TaskPriority; startDate: string | null; dueDate: string | null; tagIds: string[]; estimatedHours: number | null; actualHours: number | null }>) => {
+  const handleFormChange = (update: Partial<{ status: TaskStatus; priority: TaskPriority; difficulty: TaskDifficulty | null; startDate: string | null; dueDate: string | null; tagIds: string[]; estimatedHours: number | null; actualHours: number | null }>) => {
     if (!task) return;
     if (update.status !== undefined) {
       updateTask(task.id, { status: update.status });
@@ -124,6 +124,10 @@ export function TaskDetailPanel() {
     if (update.priority !== undefined) {
       updateTask(task.id, { priority: update.priority });
       setTask({ ...task, priority: update.priority });
+    }
+    if ('difficulty' in update) {
+      updateTask(task.id, { difficulty: update.difficulty });
+      setTask({ ...task, difficulty: update.difficulty ?? null });
     }
     if ('startDate' in update) {
       updateTask(task.id, { start_date: update.startDate });
@@ -211,6 +215,7 @@ export function TaskDetailPanel() {
                 value={{
                   status: task.status as TaskStatus,
                   priority: task.priority as TaskPriority,
+                  difficulty: task.difficulty as TaskDifficulty | null,
                   startDate: task.start_date,
                   dueDate: task.due_date,
                   tagIds: task.tags.map((t) => t.id),

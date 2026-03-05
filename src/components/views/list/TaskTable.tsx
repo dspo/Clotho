@@ -15,12 +15,14 @@ import { ArrowUp, ArrowDown, Plus } from 'lucide-react';
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/lib/constants';
 import type { TaskWithTags, TaskStatus, TaskPriority } from '@/types/task';
 import type { Tag } from '@/types/tag';
+import type { ProjectWithStats } from '@/types/project';
 import type { GroupBy } from './ListToolbar';
 
 interface TaskTableProps {
   tasks: TaskWithTags[];
   allTags: Tag[];
   groupBy: GroupBy;
+  projects?: ProjectWithStats[];
   projectName?: string;
   projectColor?: string;
   projectColorMap?: Map<string, string>;
@@ -42,7 +44,7 @@ type EditingCell = {
 const EDITABLE_COLUMNS = ['title', 'status', 'priority', 'dueDate', 'tags'] as const;
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
-  backlog: 0,
+  unscheduled: 0,
   todo: 1,
   in_progress: 2,
   done: 3,
@@ -60,6 +62,7 @@ export function TaskTable({
   tasks,
   allTags,
   groupBy,
+  projects,
   projectName,
   projectColor,
   projectColorMap,
@@ -126,6 +129,18 @@ export function TaskTable({
         }
         projectGroups.get(pid)!.push(t);
       }
+      // Use projects array order (sorted by sort_order from backend) if available
+      if (projects && projects.length > 0) {
+        return projects
+          .filter((p) => projectGroups.has(p.id))
+          .map((p) => ({
+            key: p.id,
+            label: p.name,
+            color: p.color ?? '#D1D5DB',
+            tasks: projectGroups.get(p.id)!,
+          }));
+      }
+      // Fallback: use Map iteration order
       return Array.from(projectGroups.entries()).map(([pid, tasks]) => ({
         key: pid,
         label: projectNameMap?.get(pid) ?? 'Unknown Project',
@@ -153,7 +168,7 @@ export function TaskTable({
     }
 
     return null;
-  }, [groupBy, flatTasks, projectNameMap, projectColorMap]);
+  }, [groupBy, flatTasks, projects, projectNameMap, projectColorMap]);
 
   // Build virtual rows
   type VirtualRow =
@@ -530,6 +545,7 @@ export function TaskTable({
                   onStatusChange={(status) => onUpdateTask(task.id, 'status', status)}
                   onPriorityChange={(priority) => onUpdateTask(task.id, 'priority', priority)}
                   onDelete={() => onDeleteTask(task.id)}
+                  taskIdForCopy={task.id}
                 >
                   <div
                     className={cn(

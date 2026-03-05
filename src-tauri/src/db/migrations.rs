@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-const CURRENT_VERSION: i32 = 4;
+const CURRENT_VERSION: i32 = 6;
 
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     let user_version: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -16,6 +16,12 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     }
     if user_version < 4 {
         migrate_v4(conn)?;
+    }
+    if user_version < 5 {
+        migrate_v5(conn)?;
+    }
+    if user_version < 6 {
+        migrate_v6(conn)?;
     }
 
     conn.pragma_update(None, "user_version", CURRENT_VERSION)?;
@@ -126,6 +132,21 @@ fn migrate_v4(conn: &Connection) -> Result<(), rusqlite::Error> {
         ALTER TABLE tasks ADD COLUMN estimated_hours REAL;
         ALTER TABLE tasks ADD COLUMN actual_hours REAL;
         ",
+    )?;
+    Ok(())
+}
+
+fn migrate_v5(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "ALTER TABLE tasks ADD COLUMN difficulty TEXT CHECK(difficulty IN ('simple', 'medium', 'complex'));",
+    )?;
+    Ok(())
+}
+
+fn migrate_v6(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // Rename 'backlog' status to 'unscheduled'
+    conn.execute_batch(
+        "UPDATE tasks SET status = 'unscheduled' WHERE status = 'backlog';",
     )?;
     Ok(())
 }

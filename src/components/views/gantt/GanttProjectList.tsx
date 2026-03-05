@@ -8,13 +8,12 @@ import type { Project } from '@/types/project';
 import type { TaskWithTags, TaskStatus } from '@/types/task';
 
 interface ProjectStats {
-  backlog: number;
+  unscheduled: number;
   todo: number;
   in_progress: number;
   done: number;
   cancelled: number;
   total: number;
-  unscheduled: number;
 }
 
 interface ProjectRow {
@@ -32,23 +31,22 @@ interface GanttProjectListProps {
 }
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  backlog: '#6B7280',     // gray
-  todo: '#8B5CF6',        // purple
-  in_progress: '#F59E0B', // amber
-  done: '#10B981',        // green
-  cancelled: '#EF4444',   // red
+  unscheduled: '#6B7280',  // gray
+  todo: '#8B5CF6',         // purple
+  in_progress: '#F59E0B',  // amber
+  done: '#10B981',         // green
+  cancelled: '#EF4444',    // red
 };
 
 function computeProjectStats(tasks: TaskWithTags[], projectId: string): ProjectStats {
   const projectTasks = tasks.filter((t) => t.project_id === projectId);
   return {
-    backlog: projectTasks.filter((t) => t.status === 'backlog').length,
+    unscheduled: projectTasks.filter((t) => t.status === 'unscheduled').length,
     todo: projectTasks.filter((t) => t.status === 'todo').length,
     in_progress: projectTasks.filter((t) => t.status === 'in_progress').length,
     done: projectTasks.filter((t) => t.status === 'done').length,
     cancelled: projectTasks.filter((t) => t.status === 'cancelled').length,
     total: projectTasks.length,
-    unscheduled: projectTasks.filter((t) => !t.start_date && !t.due_date).length,
   };
 }
 
@@ -60,11 +58,11 @@ function StackedProgressBar({ stats }: { stats: ProjectStats }) {
   }
 
   const allSegments: { status: TaskStatus; count: number; color: string }[] = [
-    { status: 'backlog' as const, count: stats.backlog, color: STATUS_COLORS.backlog },
-    { status: 'todo' as const, count: stats.todo, color: STATUS_COLORS.todo },
-    { status: 'in_progress' as const, count: stats.in_progress, color: STATUS_COLORS.in_progress },
-    { status: 'done' as const, count: stats.done, color: STATUS_COLORS.done },
-    { status: 'cancelled' as const, count: stats.cancelled, color: STATUS_COLORS.cancelled },
+    { status: 'unscheduled', count: stats.unscheduled, color: STATUS_COLORS.unscheduled },
+    { status: 'todo', count: stats.todo, color: STATUS_COLORS.todo },
+    { status: 'in_progress', count: stats.in_progress, color: STATUS_COLORS.in_progress },
+    { status: 'done', count: stats.done, color: STATUS_COLORS.done },
+    { status: 'cancelled', count: stats.cancelled, color: STATUS_COLORS.cancelled },
   ];
   const segments = allSegments.filter((s) => s.count > 0);
 

@@ -1,5 +1,22 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { TaskWithTags, TaskDetail, CreateTaskInput, UpdateTaskInput } from '@/types/task';
+import type { TaskWithTags, TaskDetail, CreateTaskInput, UpdateTaskInput, TaskStatus } from '@/types/task';
+
+/**
+ * Normalize status and dates based on unscheduled rules:
+ * - If status is 'unscheduled', clear both dates
+ * - If setting a date and status is 'unscheduled', switch to 'todo'
+ */
+function normalizeStatusDates<T extends { status?: TaskStatus; start_date?: string | null; due_date?: string | null }>(input: T): T {
+  const result = { ...input };
+
+  // If setting to unscheduled, clear dates
+  if (result.status === 'unscheduled') {
+    result.start_date = null;
+    result.due_date = null;
+  }
+
+  return result;
+}
 
 export const taskService = {
   listByProject: (projectId?: string) =>
@@ -9,16 +26,18 @@ export const taskService = {
     invoke<TaskDetail>('get_task', { id }),
 
   create: async (input: CreateTaskInput): Promise<TaskWithTags> => {
+    const normalized = normalizeStatusDates(input);
     const task = await invoke<TaskWithTags>('create_task', {
-      projectId: input.project_id,
-      title: input.title,
-      description: input.description,
-      descriptionFormat: input.description_format,
-      status: input.status,
-      priority: input.priority,
-      startDate: input.start_date,
-      dueDate: input.due_date,
-      parentTaskId: input.parent_task_id,
+      projectId: normalized.project_id,
+      title: normalized.title,
+      description: normalized.description,
+      descriptionFormat: normalized.description_format,
+      status: normalized.status,
+      priority: normalized.priority,
+      difficulty: normalized.difficulty,
+      startDate: normalized.start_date,
+      dueDate: normalized.due_date,
+      parentTaskId: normalized.parent_task_id,
     });
     if (input.tag_ids && input.tag_ids.length > 0) {
       await Promise.all(
@@ -29,17 +48,20 @@ export const taskService = {
   },
 
   update: async (id: string, input: UpdateTaskInput): Promise<TaskWithTags> => {
+    const normalized = normalizeStatusDates(input);
     const task = await invoke<TaskWithTags>('update_task', {
       id,
-      title: input.title,
-      description: input.description,
-      descriptionFormat: input.description_format,
-      status: input.status,
-      priority: input.priority,
-      startDate: input.start_date,
-      dueDate: input.due_date,
-      sortOrder: input.sort_order,
-      kanbanOrder: input.kanban_order,
+      title: normalized.title,
+      description: normalized.description,
+      descriptionFormat: normalized.description_format,
+      status: normalized.status,
+      priority: normalized.priority,
+      difficulty: normalized.difficulty,
+      startDate: normalized.start_date,
+      dueDate: normalized.due_date,
+      sortOrder: normalized.sort_order,
+      kanbanOrder: normalized.kanban_order,
+      projectId: normalized.project_id,
     });
 
     if (input.tag_ids !== undefined) {
