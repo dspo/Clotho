@@ -41,6 +41,7 @@ export function TaskCreateDialog({
   const [formValue, setFormValue] = useState<TaskFormValue>({
     status: defaultStatus,
     priority: defaultPriority,
+    difficulty: null,
     startDate: null,
     dueDate: null,
     tagIds: [],
@@ -56,6 +57,7 @@ export function TaskCreateDialog({
     setFormValue({
       status: defaultStatus,
       priority: defaultPriority,
+      difficulty: null,
       startDate: null,
       dueDate: null,
       tagIds: [],
@@ -76,6 +78,7 @@ export function TaskCreateDialog({
       description_format: descriptionFormat ?? undefined,
       status: formValue.status,
       priority: formValue.priority,
+      difficulty: formValue.difficulty ?? undefined,
       start_date: formValue.startDate ?? undefined,
       due_date: formValue.dueDate ?? undefined,
       estimated_hours: formValue.estimatedHours ?? undefined,

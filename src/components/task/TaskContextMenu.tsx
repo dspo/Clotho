@@ -12,6 +12,7 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { PriorityBadge } from '@/components/common/PriorityBadge';
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/lib/constants';
 import { Eye, Pencil, Copy, Trash2, Tag } from 'lucide-react';
+import { toast } from 'sonner';
 import type { TaskStatus, TaskPriority } from '@/types/task';
 
 interface TaskContextMenuProps {
@@ -22,6 +23,8 @@ interface TaskContextMenuProps {
   onAddTag?: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
+  taskIdForCopy?: string;
+  copyLabel?: string;
 }
 
 export function TaskContextMenu({
@@ -32,7 +35,22 @@ export function TaskContextMenu({
   onAddTag,
   onDuplicate,
   onDelete,
+  taskIdForCopy,
+  copyLabel = 'Copy task ID',
 }: TaskContextMenuProps) {
+  const hasPrimaryActions = !!(onOpen || onStatusChange || onPriorityChange || onAddTag);
+  const hasSecondaryActions = !!(taskIdForCopy || onDuplicate || onDelete);
+
+  const handleCopyTaskId = async () => {
+    if (!taskIdForCopy) return;
+    try {
+      await navigator.clipboard.writeText(taskIdForCopy);
+      toast.success('Task ID copied');
+    } catch {
+      toast.error('Failed to copy task ID');
+    }
+  };
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
@@ -83,7 +101,14 @@ export function TaskContextMenu({
           </ContextMenuItem>
         )}
 
-        <ContextMenuSeparator />
+        {hasPrimaryActions && hasSecondaryActions && <ContextMenuSeparator />}
+
+        {taskIdForCopy && (
+          <ContextMenuItem onClick={handleCopyTaskId}>
+            <Copy className="h-4 w-4" />
+            {copyLabel}
+          </ContextMenuItem>
+        )}
 
         {onDuplicate && (
           <ContextMenuItem onClick={onDuplicate}>

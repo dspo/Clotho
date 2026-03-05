@@ -23,7 +23,7 @@ import {
   type ZoomLevel,
   type TimeRange,
 } from './gantt-utils';
-import { generateTaskColor } from '@/lib/color';
+import { TASK_STATUSES } from '@/lib/constants';
 import {
   startOfWeek,
   endOfWeek,
@@ -32,7 +32,7 @@ import {
   endOfMonth,
 } from 'date-fns';
 
-const LEFT_PANEL_WIDTH = 280;
+const LEFT_PANEL_WIDTH = 224;
 
 export function GanttView() {
   const allTasks = useTaskStore((s) => s.tasks);
@@ -164,19 +164,24 @@ export function GanttView() {
     [tasks, timeRange, colWidth, zoomLevel, selectedProjectIdList],
   );
 
-  // Add task colors based on project
+  const statusColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const status of TASK_STATUSES) {
+      map.set(status.value, status.color);
+    }
+    return map;
+  }, []);
+
+  // Add task colors based on task status
   const packedTasksWithColors = useMemo(() => {
-    const taskIndexByProject = new Map<string, number>();
     return packedTasks.map((pt) => {
       const projectId = pt.task.project_id;
       const projectColor = projectColorMap.get(projectId) ?? '#3B82F6';
-      const idx = taskIndexByProject.get(projectId) ?? 0;
-      taskIndexByProject.set(projectId, idx + 1);
-      const taskColor = generateTaskColor(projectColor, idx);
+      const taskColor = statusColorMap.get(pt.task.status) ?? '#6B7280';
       const projectName = projectNameMap.get(projectId) ?? 'Unknown';
       return { ...pt, taskColor, projectColor, projectName };
     });
-  }, [packedTasks, projectColorMap, projectNameMap]);
+  }, [packedTasks, projectColorMap, projectNameMap, statusColorMap]);
 
   const totalWidth = useMemo(
     () => getTotalWidth(timeRange, colWidth, zoomLevel),

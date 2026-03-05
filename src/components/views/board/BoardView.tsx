@@ -7,11 +7,13 @@ import {
   useSensors,
   pointerWithin,
   closestCorners,
+  rectIntersection,
   type CollisionDetection,
   type DragStartEvent,
   type DragOverEvent,
   type DragEndEvent,
-} from '@dnd-kit/core';import { useTaskStore } from '@/stores/task-store';
+} from '@dnd-kit/core';
+import { useTaskStore } from '@/stores/task-store';
 import { useTagStore } from '@/stores/tag-store';
 import { useUIStore } from '@/stores/ui-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -26,39 +28,27 @@ import { ClipboardList } from 'lucide-react';
 import type { TaskWithTags, TaskStatus, TaskPriority, CreateTaskInput } from '@/types/task';
 import type { ProjectWithStats } from '@/types/project';
 
+interface ProjectGroup {
+  projectId: string;
+  projectName: string;
+  projectColor: string;
+  tasks: TaskWithTags[];
+}
+
 interface ColumnDef {
   id: string;
   name: string;
   color: string;
   status?: TaskStatus;
-  isProject?: boolean;
 }
 
-interface SubGroup {
-  key: string;
-  label: string;
-  color: string;
-  tasks: TaskWithTags[];
-}
-
-function getColumnsForGroup(groupBy: BoardGroupBy, projects: ProjectWithStats[], tasks: TaskWithTags[]): ColumnDef[] {
+function getColumnsForGroup(groupBy: BoardGroupBy): ColumnDef[] {
   if (groupBy === 'priority') {
     return TASK_PRIORITIES.map((p) => ({
       id: p.value,
       name: p.label,
       color: p.color,
     }));
-  }
-  if (groupBy === 'project' || groupBy === 'project-status') {
-    const projectIdsInUse = new Set(tasks.map((t) => t.project_id));
-    return projects
-      .filter((p) => projectIdsInUse.has(p.id))
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        color: p.color,
-        isProject: true,
-      }));
   }
   return TASK_STATUSES.map((s) => ({
     id: s.value,
@@ -84,11 +74,6 @@ function groupTasks(
       const list = groups.get(task.priority);
       if (list) list.push(task);
     }
-  } else if (groupBy === 'project' || groupBy === 'project-status') {
-    for (const task of tasks) {
-      const list = groups.get(task.project_id);
-      if (list) list.push(task);
-    }
   } else {
     for (const task of tasks) {
       const list = groups.get(task.status);
@@ -103,20 +88,32 @@ function groupTasks(
   return groups;
 }
 
-function buildSubGroups(tasks: TaskWithTags[]): SubGroup[] {
-  return TASK_STATUSES.map((s) => ({
-    key: s.value,
-    label: s.label,
-    color: s.color,
-    tasks: tasks.filter((t) => t.status === s.value),
-  })).filter((g) => g.tasks.length > 0);
+function matchesFilter(task: TaskWithTags, filter: FilterState): boolean {
+  if (filter.search) {
+    const q = filter.search.toLowerCase();
+    if (!task.title.toLowerCase().includes(q)) return false;
+  }
+  if (filter.statuses.length > 0 && !filter.statuses.includes(task.status)) {
+    return false;
+  }
+  if (filter.priorities.length > 0 && !filter.priorities.includes(task.priority)) {
+    return false;
+  }
+  if (filter.tagIds.length > 0) {
+    const taskTagIds = new Set(task.tags.map((t) => t.id));
+    if (!filter.tagIds.some((id) => taskTagIds.has(id))) return false;
+  }
+  return true;
 }
 
-interface ProjectGroup {
-  projectId: string;
-  projectName: string;
-  projectColor: string;
-  tasks: TaskWithTags[];
+function hasActiveFilter(filter: FilterState): boolean {
+  return (
+    filter.search.length > 0 ||
+    filter.statuses.length > 0 ||
+    filter.priorities.length > 0 ||
+    filter.tagIds.length > 0 ||
+    filter.datePreset !== null
+  );
 }
 
 function buildProjectGroups(
@@ -148,34 +145,6 @@ function buildProjectGroups(
     .filter((g) => g.tasks.length > 0);
 }
 
-function matchesFilter(task: TaskWithTags, filter: FilterState): boolean {
-  if (filter.search) {
-    const q = filter.search.toLowerCase();
-    if (!task.title.toLowerCase().includes(q)) return false;
-  }
-  if (filter.statuses.length > 0 && !filter.statuses.includes(task.status)) {
-    return false;
-  }
-  if (filter.priorities.length > 0 && !filter.priorities.includes(task.priority)) {
-    return false;
-  }
-  if (filter.tagIds.length > 0) {
-    const taskTagIds = new Set(task.tags.map((t) => t.id));
-    if (!filter.tagIds.some((id) => taskTagIds.has(id))) return false;
-  }
-  return true;
-}
-
-function hasActiveFilter(filter: FilterState): boolean {
-  return (
-    filter.search.length > 0 ||
-    filter.statuses.length > 0 ||
-    filter.priorities.length > 0 ||
-    filter.tagIds.length > 0 ||
-    filter.datePreset !== null
-  );
-}
-
 export function BoardView() {
   const allTasks = useTaskStore((s) => s.tasks);
   const fetchTasks = useTaskStore((s) => s.fetchTasks);
@@ -194,7 +163,6 @@ export function BoardView() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createForProjectId, setCreateForProjectId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     fetchTasks();
@@ -207,10 +175,14 @@ export function BoardView() {
     }),
   );
 
-  // Custom collision detection: prefer pointerWithin, fallback to closestCorners
+  // Custom collision detection: prefer pointerWithin, fallback to rectIntersection, then closestCorners
   const collisionDetection: CollisionDetection = useCallback((args) => {
     const pointerResult = pointerWithin(args);
     if (pointerResult.length > 0) return pointerResult;
+
+    const rectResult = rectIntersection(args);
+    if (rectResult.length > 0) return rectResult;
+
     return closestCorners(args);
   }, []);
 
@@ -231,7 +203,7 @@ export function BoardView() {
     return map;
   }, [projects]);
 
-  const columns = useMemo(() => getColumnsForGroup(groupBy, projects, tasks), [groupBy, projects, tasks]);
+  const columns = useMemo(() => getColumnsForGroup(groupBy), [groupBy]);
   const grouped = useMemo(() => groupTasks(tasks, groupBy, columns), [tasks, groupBy, columns]);
 
   const filteredIds = useMemo(() => {
@@ -268,25 +240,38 @@ export function BoardView() {
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
-      const { over } = event;
+      const { active, over } = event;
       if (!over) {
         setOverColumnId(null);
         return;
       }
 
-      const overId = String(over.id);
-      // Handle sub-group droppable IDs (format: "subgroup:{columnId}:{status}")
-      if (overId.startsWith('subgroup:')) {
-        const columnId = overId.split(':')[1];
-        setOverColumnId(columnId);
-      } else if (grouped.has(overId)) {
-        setOverColumnId(overId);
+      const activeData = active.data.current;
+      const overData = over.data.current;
+
+      // Only process if active is a Task
+      if (activeData?.type !== 'Task') {
+        setOverColumnId(null);
+        return;
+      }
+
+      // Determine which column we're over
+      if (overData?.type === 'Column') {
+        // Directly over a column
+        setOverColumnId(String(over.id));
+      } else if (overData?.type === 'Task') {
+        // Over another task - find its column
+        const overTask = overData.task as TaskWithTags;
+        if (groupBy === 'status') {
+          setOverColumnId(overTask.status);
+        } else {
+          setOverColumnId(overTask.priority);
+        }
       } else {
-        const col = findColumnForTask(overId);
-        setOverColumnId(col);
+        setOverColumnId(null);
       }
     },
-    [grouped, findColumnForTask],
+    [groupBy],
   );
 
   const handleDragEnd = useCallback(
@@ -297,29 +282,31 @@ export function BoardView() {
       const { active, over } = event;
       if (!active || !over) return;
 
+      const activeData = active.data.current;
+      const overData = over.data.current;
+
+      // Only process if active is a Task
+      if (activeData?.type !== 'Task') return;
+
       const activeTaskId = String(active.id);
+      const task = activeData.task as TaskWithTags;
       const overId = String(over.id);
 
-      const task = tasks.find((t) => t.id === activeTaskId);
-      if (!task) return;
+      // Determine source column
+      const sourceColumn = groupBy === 'status' ? task.status : task.priority;
 
-      const sourceColumn = findColumnForTask(activeTaskId);
-      if (!sourceColumn) return;
-
-      // Resolve target column:
-      // Priority: subgroup id > column id > task id (find containing column)
+      // Determine target column
       let targetColumn: string;
-      let targetStatus: TaskStatus | null = null;
 
-      if (overId.startsWith('subgroup:')) {
-        const parts = overId.split(':');
-        targetColumn = parts[1];
-        targetStatus = parts[2] as TaskStatus;
-      } else if (grouped.has(overId)) {
-        // Dropped directly on a column droppable
+      if (overData?.type === 'Column') {
+        // Dropped directly on a column
         targetColumn = overId;
+      } else if (overData?.type === 'Task') {
+        // Dropped on another task
+        const overTask = overData.task as TaskWithTags;
+        targetColumn = groupBy === 'status' ? overTask.status : overTask.priority;
       } else {
-        // Dropped on a task card — find its containing column
+        // Fallback: try to find column for task
         const col = findColumnForTask(overId);
         if (!col) return;
         targetColumn = col;
@@ -327,8 +314,8 @@ export function BoardView() {
 
       const targetTasks = [...(grouped.get(targetColumn) ?? [])];
 
-      // Same column, same status — reorder only
-      if (sourceColumn === targetColumn && !targetStatus) {
+      // Same column — reorder only
+      if (sourceColumn === targetColumn) {
         const sourceTasks = [...(grouped.get(sourceColumn) ?? [])];
         const oldIndex = sourceTasks.findIndex((t) => t.id === activeTaskId);
         const newIndex = sourceTasks.findIndex((t) => t.id === overId);
@@ -336,7 +323,7 @@ export function BoardView() {
 
         try {
           await useTaskStore.getState().updateTask(activeTaskId, {
-            kanban_order: newIndex,
+            kanban_order: String(newIndex),
           });
         } catch {
           fetchTasks();
@@ -348,23 +335,16 @@ export function BoardView() {
       const updateInput: Record<string, unknown> = {};
 
       if (groupBy === 'status') {
-        // Only change status — never change project_id
         updateInput.status = targetColumn as TaskStatus;
         if (targetColumn === 'done') {
           updateInput.completed_at = new Date().toISOString();
         } else if (task.status === 'done') {
           updateInput.completed_at = null;
         }
-      } else if (groupBy === 'project' || groupBy === 'project-status') {
-        // Columns are project ids — don't allow cross-project moves
-        if (targetColumn !== task.project_id) return;
-        if (groupBy === 'project-status' && targetStatus) {
-          updateInput.status = targetStatus;
-          if (targetStatus === 'done') {
-            updateInput.completed_at = new Date().toISOString();
-          } else if (task.status === 'done') {
-            updateInput.completed_at = null;
-          }
+        // When moving to unscheduled, clear dates
+        if (targetColumn === 'unscheduled') {
+          updateInput.start_date = null;
+          updateInput.due_date = null;
         }
       } else {
         // priority grouping
@@ -372,12 +352,12 @@ export function BoardView() {
       }
 
       // Determine kanban_order in target column
-      if (grouped.has(overId) || overId.startsWith('subgroup:')) {
-        // Dropped on column/subgroup header → append to end
-        updateInput.kanban_order = targetTasks.length;
+      if (overData?.type === 'Column') {
+        // Dropped on column header → append to end
+        updateInput.kanban_order = String(targetTasks.length);
       } else {
         const overIndex = targetTasks.findIndex((t) => t.id === overId);
-        updateInput.kanban_order = overIndex !== -1 ? overIndex : targetTasks.length;
+        updateInput.kanban_order = String(overIndex !== -1 ? overIndex : targetTasks.length);
       }
 
       try {
@@ -386,7 +366,7 @@ export function BoardView() {
         fetchTasks();
       }
     },
-    [grouped, tasks, groupBy, findColumnForTask, fetchTasks],
+    [grouped, groupBy, findColumnForTask, fetchTasks],
   );
 
   // --- Task create ---
@@ -396,11 +376,6 @@ export function BoardView() {
     },
     [createTask],
   );
-
-  const handleNewTaskForProject = useCallback((projectId: string) => {
-    setCreateForProjectId(projectId);
-    setCreateDialogOpen(true);
-  }, []);
 
   const handleTaskClick = useCallback(
     (taskId: string) => {
@@ -516,12 +491,7 @@ export function BoardView() {
   }, [selectedTaskId, columns, collapsedColumns, grouped, setSelectedTask, handleTaskDoubleClick]);
 
   // Default projectId for task creation dialog
-  const defaultProjectId = createForProjectId ?? selectedProjectIds[0] ?? projects.find((p) => p.status === 'active')?.id ?? '';
-
-  const handleCreateDialogOpenChange = useCallback((open: boolean) => {
-    setCreateDialogOpen(open);
-    if (!open) setCreateForProjectId(undefined);
-  }, []);
+  const defaultProjectId = selectedProjectIds[0] ?? projects.find((p) => p.status === 'active')?.id ?? '';
 
   // --- Empty state ---
   if (tasks.length === 0) {
@@ -546,7 +516,7 @@ export function BoardView() {
         {defaultProjectId && (
           <TaskCreateDialog
             open={createDialogOpen}
-            onOpenChange={handleCreateDialogOpenChange}
+            onOpenChange={setCreateDialogOpen}
             onSubmit={handleCreateTaskFromDialog}
             projectId={defaultProjectId}
             allTags={tagsList}
@@ -587,11 +557,9 @@ export function BoardView() {
               onToggleCollapse={() => toggleCollapse(col.id)}
               onTaskClick={handleTaskClick}
               onTaskDoubleClick={handleTaskDoubleClick}
-              onNewTaskForProject={handleNewTaskForProject}
               selectedTaskId={selectedTaskId}
               isDragOver={overColumnId === col.id}
               projectColorMap={projectColorMap}
-              subGroups={groupBy === 'project-status' ? buildSubGroups(grouped.get(col.id) ?? []) : undefined}
               projectGroups={groupBy === 'status' ? buildProjectGroups(grouped.get(col.id) ?? [], projects) : undefined}
             />
           ))}

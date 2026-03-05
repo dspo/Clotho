@@ -82,3 +82,27 @@ export function generateTaskColor(projectHex: string, index: number): string {
   const newL = Math.max(0.25, Math.min(0.75, l + offset));
   return hslToHex(h, Math.min(s, 0.85), newL);
 }
+
+interface SoftenColorOptions {
+  saturation?: number;
+  lightnessDelta?: number;
+}
+
+/**
+ * Keep hue, slightly reduce saturation and lift lightness to make colors feel less heavy.
+ */
+export function softenHexColor(
+  hex: string,
+  options: SoftenColorOptions = {},
+): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+
+  const saturation = options.saturation ?? 0.84;
+  const lightnessDelta = options.lightnessDelta ?? 0.03;
+  const { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+
+  const nextS = Math.max(0, Math.min(1, s * saturation));
+  const nextL = Math.max(0, Math.min(1, l + lightnessDelta));
+  return hslToHex(h, nextS, nextL);
+}

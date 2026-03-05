@@ -8,6 +8,7 @@ import {
   type PackedTask,
 } from './gantt-utils';
 import { GanttTaskBar } from './GanttTaskBar';
+import { TaskContextMenu } from '@/components/task/TaskContextMenu';
 
 interface PackedTaskWithColor extends PackedTask {
   taskColor: string;
@@ -140,25 +141,28 @@ export function GanttTimeline({
         const y = pt.packedRow * ROW_HEIGHT;
 
         return (
-          <GanttTaskBar
-            key={pt.task.id}
-            task={pt.task}
-            x={pt.barX}
-            y={y}
-            width={pt.barWidth}
-            color={pt.taskColor}
-            projectName={pt.projectName}
-            timeRange={timeRange}
-            colWidth={colWidth}
-            zoomLevel={zoomLevel}
-            selected={selectedTaskId === pt.task.id}
-            onClick={() => onSelectTask(pt.task.id)}
-            onDoubleClick={() => onTaskDoubleClick(pt.task.id)}
-            onDateChange={onDateChange}
-            onUnschedule={onUnschedule}
-            onRowChange={onRowChange}
-            totalPackedRows={rowCount}
-          />
+          <TaskContextMenu key={pt.task.id} taskIdForCopy={pt.task.id}>
+            <g>
+              <GanttTaskBar
+                task={pt.task}
+                x={pt.barX}
+                y={y}
+                width={pt.barWidth}
+                color={pt.taskColor}
+                projectName={pt.projectName}
+                timeRange={timeRange}
+                colWidth={colWidth}
+                zoomLevel={zoomLevel}
+                selected={selectedTaskId === pt.task.id}
+                onClick={() => onSelectTask(pt.task.id)}
+                onDoubleClick={() => onTaskDoubleClick(pt.task.id)}
+                onDateChange={onDateChange}
+                onUnschedule={onUnschedule}
+                onRowChange={onRowChange}
+                totalPackedRows={rowCount}
+              />
+            </g>
+          </TaskContextMenu>
         );
       })}
     </svg>

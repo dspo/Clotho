@@ -4,19 +4,8 @@ import { cn } from '@/lib/utils';
 import { BoardColumnHeader } from './BoardColumnHeader';
 import { BoardCard } from './BoardCard';
 import { BoardProjectGroup } from './BoardProjectGroup';
+import { TaskContextMenu } from '@/components/task/TaskContextMenu';
 import type { TaskWithTags } from '@/types/task';
-
-function SubGroupDroppable({ groupId, children }: { groupId: string; children: React.ReactNode }) {
-  const { setNodeRef } = useDroppable({ id: groupId });
-  return <div ref={setNodeRef}>{children}</div>;
-}
-
-interface SubGroup {
-  key: string;
-  label: string;
-  color: string;
-  tasks: TaskWithTags[];
-}
 
 interface ProjectGroup {
   projectId: string;
@@ -36,11 +25,9 @@ interface BoardColumnProps {
   onToggleCollapse: () => void;
   onTaskClick: (taskId: string) => void;
   onTaskDoubleClick: (taskId: string) => void;
-  onNewTaskForProject?: (projectId: string) => void;
   selectedTaskId: string | null;
   isDragOver?: boolean;
   projectColorMap?: Map<string, string>;
-  subGroups?: SubGroup[];
   projectGroups?: ProjectGroup[];
 }
 
@@ -55,14 +42,18 @@ export function BoardColumn({
   onToggleCollapse,
   onTaskClick,
   onTaskDoubleClick,
-  onNewTaskForProject,
   selectedTaskId,
   isDragOver,
   projectColorMap,
-  subGroups,
   projectGroups,
 }: BoardColumnProps) {
-  const { setNodeRef } = useDroppable({ id });
+  const { setNodeRef } = useDroppable({
+    id,
+    data: {
+      type: 'Column',
+      column: { id, name },
+    },
+  });
   const taskIds = tasks.map((t) => t.id);
 
   const matchingCount = filteredIds
@@ -127,39 +118,7 @@ export function BoardColumn({
                 selectedTaskId={selectedTaskId}
                 onTaskClick={onTaskClick}
                 onTaskDoubleClick={onTaskDoubleClick}
-                onNewTask={() => onNewTaskForProject?.(pg.projectId)}
               />
-            ))
-          ) : subGroups ? (
-            subGroups.map((sg) => (
-              <SubGroupDroppable key={sg.key} groupId={`subgroup:${id}:${sg.key}`}>
-                <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  <span
-                    className="h-1.5 w-1.5 rounded-full shrink-0"
-                    style={{ backgroundColor: sg.color }}
-                  />
-                  <span>{sg.label}</span>
-                  <span className="text-[10px]">({sg.tasks.length})</span>
-                </div>
-                {sg.tasks.map((task) => {
-                  const subtasks = allTasks.filter(
-                    (t) => t.parent_task_id === task.id,
-                  );
-                  const isDimmed = filteredIds !== null && !filteredIds.has(task.id);
-                  return (
-                    <BoardCard
-                      key={task.id}
-                      task={task}
-                      subtasks={subtasks}
-                      dimmed={isDimmed}
-                      isSelected={selectedTaskId === task.id}
-                      onClick={() => onTaskClick(task.id)}
-                      onDoubleClick={() => onTaskDoubleClick(task.id)}
-                      projectColor={projectColorMap?.get(task.project_id)}
-                    />
-                  );
-                })}
-              </SubGroupDroppable>
             ))
           ) : (
             tasks.map((task) => {
@@ -168,16 +127,17 @@ export function BoardColumn({
               );
               const isDimmed = filteredIds !== null && !filteredIds.has(task.id);
               return (
-                <BoardCard
-                  key={task.id}
-                  task={task}
-                  subtasks={subtasks}
-                  dimmed={isDimmed}
-                  isSelected={selectedTaskId === task.id}
-                  onClick={() => onTaskClick(task.id)}
-                  onDoubleClick={() => onTaskDoubleClick(task.id)}
-                  projectColor={projectColorMap?.get(task.project_id)}
-                />
+                <TaskContextMenu key={task.id} taskIdForCopy={task.id}>
+                  <BoardCard
+                    task={task}
+                    subtasks={subtasks}
+                    dimmed={isDimmed}
+                    isSelected={selectedTaskId === task.id}
+                    onClick={() => onTaskClick(task.id)}
+                    onDoubleClick={() => onTaskDoubleClick(task.id)}
+                    projectColor={projectColorMap?.get(task.project_id)}
+                  />
+                </TaskContextMenu>
               );
             })
           )}

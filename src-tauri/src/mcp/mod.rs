@@ -24,7 +24,7 @@ use crate::state::AppState;
 struct ListTasksParams {
     #[schemars(description = "Optional project ID to filter by")]
     project_id: Option<String>,
-    #[schemars(description = "Optional status filter (backlog, todo, in_progress, done, cancelled)")]
+    #[schemars(description = "Optional status filter (unscheduled, todo, in_progress, done, cancelled)")]
     status: Option<String>,
     #[schemars(description = "Optional priority filter (urgent, high, medium, low)")]
     priority: Option<String>,
@@ -43,8 +43,11 @@ struct CreateTaskParams {
     #[schemars(description = "Task title")]
     title: String,
     description: Option<String>,
+    #[schemars(description = "Optional status filter (unscheduled, todo, in_progress, done, cancelled)")]
     status: Option<String>,
     priority: Option<String>,
+    #[schemars(description = "Task difficulty (simple, medium, complex)")]
+    difficulty: Option<String>,
     #[schemars(description = "Start date in YYYY-MM-DD format")]
     start_date: Option<String>,
     #[schemars(description = "Due date in YYYY-MM-DD format")]
@@ -60,8 +63,11 @@ struct UpdateTaskParams {
     id: String,
     title: Option<String>,
     description: Option<String>,
+    #[schemars(description = "Task status (unscheduled, todo, in_progress, done, cancelled)")]
     status: Option<String>,
     priority: Option<String>,
+    #[schemars(description = "Task difficulty (simple, medium, complex)")]
+    difficulty: Option<String>,
     start_date: Option<String>,
     due_date: Option<String>,
     #[schemars(description = "Estimated hours to complete the task")]
@@ -188,6 +194,7 @@ impl ClothoMcpServer {
             description_format: None,
             status: p.status,
             priority: p.priority,
+            difficulty: p.difficulty,
             start_date: p.start_date,
             due_date: p.due_date,
             parent_task_id: None,
@@ -209,6 +216,7 @@ impl ClothoMcpServer {
             description_format: None,
             status: p.status,
             priority: p.priority,
+            difficulty: p.difficulty,
             start_date: p.start_date,
             due_date: p.due_date,
             parent_task_id: None,
@@ -217,6 +225,7 @@ impl ClothoMcpServer {
             estimated_hours: p.estimated_hours,
             actual_hours: p.actual_hours,
             tag_ids: p.tag_ids,
+            project_id: None,
         };
         let task = TaskRepository::update(&db, &p.id, &input).map_err(app_err)?;
         ok_json(&task)

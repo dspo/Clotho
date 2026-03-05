@@ -16,6 +16,7 @@ pub struct TaskData {
     pub description_format: Option<String>,
     pub status: String,
     pub priority: String,
+    pub difficulty: Option<String>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub completed_at: Option<String>,
@@ -54,6 +55,7 @@ pub struct CreateTaskInput {
     pub description_format: Option<String>,
     pub status: Option<String>,
     pub priority: Option<String>,
+    pub difficulty: Option<String>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub parent_task_id: Option<String>,
@@ -71,6 +73,7 @@ pub struct UpdateTaskInput {
     pub description_format: Option<String>,
     pub status: Option<String>,
     pub priority: Option<String>,
+    pub difficulty: Option<String>,
     pub start_date: Option<String>,
     pub due_date: Option<String>,
     pub parent_task_id: Option<String>,
@@ -79,6 +82,7 @@ pub struct UpdateTaskInput {
     pub estimated_hours: Option<f64>,
     pub actual_hours: Option<f64>,
     pub tag_ids: Option<Vec<String>>,
+    pub project_id: Option<String>,
 }
 
 /// Filters for listing tasks.

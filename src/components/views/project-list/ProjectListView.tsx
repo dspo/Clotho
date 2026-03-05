@@ -1,5 +1,18 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ClipboardList, SearchX } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -23,6 +36,7 @@ export function ProjectListView() {
   const createProject = useProjectStore((s) => s.createProject);
   const updateProject = useProjectStore((s) => s.updateProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
+  const reorderProjects = useProjectStore((s) => s.reorderProjects);
 
   const openDetailPanel = useUIStore((s) => s.openDetailPanel);
 
@@ -31,6 +45,13 @@ export function ProjectListView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [focusIndex, setFocusIndex] = useState(-1);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+  );
 
   // Dialogs
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -152,6 +173,26 @@ export function ProjectListView() {
     [openDetailPanel],
   );
 
+  // DnD handler - only enabled when using default sort order
+  const canDragReorder = sortOption === 'default' && !searchQuery;
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIdx = filteredProjects.findIndex((p) => p.id === active.id);
+      const newIdx = filteredProjects.findIndex((p) => p.id === over.id);
+      if (oldIdx !== -1 && newIdx !== -1) {
+        const newOrder = arrayMove(
+          filteredProjects.map((p) => p.id),
+          oldIdx,
+          newIdx,
+        );
+        await reorderProjects(newOrder);
+      }
+    },
+    [filteredProjects, reorderProjects],
+  );
+
   // Keyboard shortcuts
   useKeyboardShortcuts(
     useMemo(
@@ -235,20 +276,33 @@ export function ProjectListView() {
             description="Try different keywords or adjust your filters"
           />
         ) : (
-          <div className="rounded-lg border">
-            {filteredProjects.map((project) => (
-              <ProjectRow
-                key={project.id}
-                project={project}
-                expanded={expandedIds.has(project.id)}
-                onToggleExpand={() => toggleExpand(project.id)}
-                onEdit={() => setEditDialog({ open: true, project })}
-                onArchive={() => setArchiveConfirm({ open: true, project })}
-                onDelete={() => setDeleteConfirm({ open: true, project })}
-                onTaskClick={handleTaskClick}
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredProjects.map((p) => p.id)}
+              strategy={verticalListSortingStrategy}
+              disabled={!canDragReorder}
+            >
+              <div className="rounded-lg border">
+                {filteredProjects.map((project) => (
+                  <ProjectRow
+                    key={project.id}
+                    project={project}
+                    expanded={expandedIds.has(project.id)}
+                    onToggleExpand={() => toggleExpand(project.id)}
+                    onEdit={() => setEditDialog({ open: true, project })}
+                    onArchive={() => setArchiveConfirm({ open: true, project })}
+                    onDelete={() => setDeleteConfirm({ open: true, project })}
+                    onTaskClick={handleTaskClick}
+                    isDraggable={canDragReorder}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {/* Create dialog */}

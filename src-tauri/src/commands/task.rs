@@ -39,6 +39,7 @@ pub fn create_task(
     description_format: Option<String>,
     status: Option<String>,
     priority: Option<String>,
+    difficulty: Option<String>,
     start_date: Option<String>,
     due_date: Option<String>,
     parent_task_id: Option<String>,
@@ -55,6 +56,7 @@ pub fn create_task(
         description_format,
         status,
         priority,
+        difficulty,
         start_date,
         due_date,
         parent_task_id,
@@ -75,6 +77,7 @@ pub fn update_task(
     description_format: Option<String>,
     status: Option<String>,
     priority: Option<String>,
+    difficulty: Option<String>,
     start_date: Option<String>,
     due_date: Option<String>,
     parent_task_id: Option<String>,
@@ -83,6 +86,7 @@ pub fn update_task(
     estimated_hours: Option<f64>,
     actual_hours: Option<f64>,
     tag_ids: Option<Vec<String>>,
+    project_id: Option<String>,
 ) -> Result<TaskData, AppError> {
     let db = lock_db(&state)?;
     let input = UpdateTaskInput {
@@ -91,6 +95,7 @@ pub fn update_task(
         description_format,
         status,
         priority,
+        difficulty,
         start_date,
         due_date,
         parent_task_id,
@@ -99,6 +104,7 @@ pub fn update_task(
         estimated_hours,
         actual_hours,
         tag_ids,
+        project_id,
     };
     TaskRepository::update(&db, &id, &input)
 }

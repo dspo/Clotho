@@ -14,7 +14,7 @@ use crate::models::tag::Tag;
 
 /// Field list for task queries - single source of truth.
 const TASK_FIELDS: &str = "id, project_id, parent_task_id, title, description, description_format, \
-    status, priority, start_date, due_date, completed_at, is_milestone, sort_order, kanban_order, \
+    status, priority, difficulty, start_date, due_date, completed_at, is_milestone, sort_order, kanban_order, \
     estimated_hours, actual_hours, created_at, updated_at";
 
 pub struct TaskRepository;
@@ -110,9 +110,9 @@ impl TaskRepository {
 
         conn.execute(
             "INSERT INTO tasks (id, project_id, parent_task_id, title, description, description_format, \
-                status, priority, start_date, due_date, is_milestone, sort_order, kanban_order, \
+                status, priority, difficulty, start_date, due_date, is_milestone, sort_order, kanban_order, \
                 estimated_hours, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             rusqlite::params![
                 &id,
                 &input.project_id,
@@ -122,6 +122,7 @@ impl TaskRepository {
                 &input.description_format,
                 status,
                 priority,
+                &input.difficulty,
                 &input.start_date,
                 &input.due_date,
                 is_milestone,
@@ -193,6 +194,12 @@ impl TaskRepository {
                 rusqlite::params![v, &now, id],
             )?;
         }
+        if let Some(ref v) = input.difficulty {
+            conn.execute(
+                "UPDATE tasks SET difficulty = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![v, &now, id],
+            )?;
+        }
         if let Some(ref v) = input.start_date {
             conn.execute(
                 "UPDATE tasks SET start_date = ?1, updated_at = ?2 WHERE id = ?3",
@@ -232,6 +239,12 @@ impl TaskRepository {
         if let Some(v) = input.actual_hours {
             conn.execute(
                 "UPDATE tasks SET actual_hours = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![v, &now, id],
+            )?;
+        }
+        if let Some(ref v) = input.project_id {
+            conn.execute(
+                "UPDATE tasks SET project_id = ?1, updated_at = ?2 WHERE id = ?3",
                 rusqlite::params![v, &now, id],
             )?;
         }
@@ -475,15 +488,16 @@ fn row_to_task_data(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskData> {
         description_format: row.get(5)?,
         status: row.get(6)?,
         priority: row.get(7)?,
-        start_date: row.get(8)?,
-        due_date: row.get(9)?,
-        completed_at: row.get(10)?,
-        is_milestone: row.get(11)?,
-        sort_order: row.get(12)?,
-        kanban_order: row.get(13)?,
-        estimated_hours: row.get(14)?,
-        actual_hours: row.get(15)?,
-        created_at: row.get(16)?,
-        updated_at: row.get(17)?,
+        difficulty: row.get(8)?,
+        start_date: row.get(9)?,
+        due_date: row.get(10)?,
+        completed_at: row.get(11)?,
+        is_milestone: row.get(12)?,
+        sort_order: row.get(13)?,
+        kanban_order: row.get(14)?,
+        estimated_hours: row.get(15)?,
+        actual_hours: row.get(16)?,
+        created_at: row.get(17)?,
+        updated_at: row.get(18)?,
     })
 }

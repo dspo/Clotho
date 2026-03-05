@@ -12,7 +12,7 @@ import {
 import { Plus } from 'lucide-react';
 import type { Tag } from '@/types/tag';
 
-export type BoardGroupBy = 'project' | 'status' | 'priority' | 'project-status';
+export type BoardGroupBy = 'status' | 'priority';
 
 interface BoardToolbarProps {
   groupBy: BoardGroupBy;
@@ -42,10 +42,8 @@ export function BoardToolbar({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="project">Project</SelectItem>
             <SelectItem value="status">Status</SelectItem>
             <SelectItem value="priority">Priority</SelectItem>
-            <SelectItem value="project-status">Project &gt; Status</SelectItem>
           </SelectContent>
         </Select>
       </div>
