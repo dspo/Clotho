@@ -97,7 +97,13 @@ pub fn run() {
             }; // conn guard dropped here, before file IO
 
             // Build file path: images/{id}.{ext}
-            let ext = filename.rsplit('.').next().unwrap_or("bin");
+            // Sanitize ext to prevent path traversal (only allow alphanumeric chars)
+            let raw_ext = filename.rsplit('.').next().unwrap_or("bin");
+            let sanitized_ext: String = raw_ext
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect();
+            let ext = if sanitized_ext.is_empty() { "bin" } else { &sanitized_ext };
             let stored_filename = format!("{}.{}", image_id, ext);
 
             let images_dir = match app.path().app_data_dir() {
@@ -124,7 +130,12 @@ pub fn run() {
             };
 
             // Validate mime_type, fallback to application/octet-stream if invalid
-            let content_type = if mime_type.is_empty() || mime_type.contains('\0') {
+            // Reject empty, NUL, CR, LF to prevent header injection
+            let content_type = if mime_type.is_empty()
+                || mime_type.contains('\0')
+                || mime_type.contains('\r')
+                || mime_type.contains('\n')
+            {
                 "application/octet-stream".to_string()
             } else {
                 mime_type

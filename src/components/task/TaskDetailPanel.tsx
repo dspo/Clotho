@@ -87,8 +87,9 @@ export function TaskDetailPanel() {
   const handleDescriptionBlur = () => {
     if (task && descriptionValue !== (task.description ?? '')) {
       // Send empty string explicitly to clear description (undefined would be ignored by backend)
+      // Backend stores empty string; we keep local state consistent
       updateTask(task.id, { description: descriptionValue });
-      setTask({ ...task, description: descriptionValue || null });
+      setTask({ ...task, description: descriptionValue || '' });
       showSaved();
     }
     setEditingDescription(false);
