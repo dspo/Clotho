@@ -8,6 +8,7 @@ import Image from '@tiptap/extension-image';
 import { Markdown, MarkdownStorage } from 'tiptap-markdown';
 import { defaultMarkdownSerializer, MarkdownSerializerState } from 'prosemirror-markdown';
 import { Node as PmNode } from 'prosemirror-model';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { cn } from '@/lib/utils';
 import { SlashMenu, SlashMenuExtension } from './SlashMenu';
 
@@ -35,14 +36,14 @@ const HeadingExitExtension = Extension.create({
   },
 });
 
-// Submit extension: ⌘Enter to submit and blur
-const createSubmitExtension = (onSubmit: () => void) =>
+// Submit extension: ⌘Enter to blur (which triggers onBlur -> onSubmit)
+// We only blur here; onSubmit is called in onBlur to avoid double submission
+const createSubmitExtension = () =>
   Extension.create({
     name: 'submit',
     addKeyboardShortcuts() {
       return {
         'Mod-Enter': ({ editor }) => {
-          onSubmit();
           editor.commands.blur();
           return true;
         },
@@ -151,7 +152,7 @@ export function RichTextEditor({
       MarkdownImageExtension,
       Markdown,
       HeadingExitExtension,
-      createSubmitExtension(() => onSubmitRef.current?.()),
+      createSubmitExtension(),
       SlashMenuExtension.configure({
         onOpen: ({ query, clientRect }) => {
           setSlashQuery(query);
@@ -297,7 +298,7 @@ export function RichTextEditor({
     [editor, slashQuery],
   );
 
-  // Handle link clicks in readOnly mode
+  // Handle link clicks in readOnly mode using Tauri opener plugin
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!readOnly) return;
@@ -306,8 +307,11 @@ export function RichTextEditor({
       if (link) {
         e.preventDefault();
         const href = link.getAttribute('href');
-        if (href) {
-          window.open(href, '_blank', 'noopener,noreferrer');
+        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+          openUrl(href).catch(() => {
+            // Fallback for dev mode or if plugin fails
+            window.open(href, '_blank', 'noopener,noreferrer');
+          });
         }
       }
     },

@@ -19,7 +19,7 @@ function ScrollArea({
       {/* [&>div]:!block overrides Radix's internal display:table which breaks flex layouts */}
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] [&>div]:!block"
+        className="size-full rounded-[inherit] [&>div]:!block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
