@@ -134,14 +134,14 @@ pub fn run() {
                 .status(200)
                 .header("Content-Type", content_type)
                 .header("Cache-Control", "max-age=31536000, immutable")
-                .body(bytes.clone())
+                .body(bytes)
             {
                 Ok(resp) => resp,
                 Err(_) => {
-                    // Fallback if header construction fails
+                    // Fallback if header construction fails (return empty body)
                     tauri::http::Response::builder()
-                        .status(200)
-                        .body(bytes)
+                        .status(500)
+                        .body(Vec::new())
                         .unwrap()
                 }
             }

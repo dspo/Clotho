@@ -86,7 +86,8 @@ export function TaskDetailPanel() {
 
   const handleDescriptionBlur = () => {
     if (task && descriptionValue !== (task.description ?? '')) {
-      updateTask(task.id, { description: descriptionValue || undefined });
+      // Send empty string explicitly to clear description (undefined would be ignored by backend)
+      updateTask(task.id, { description: descriptionValue });
       setTask({ ...task, description: descriptionValue || null });
       showSaved();
     }
