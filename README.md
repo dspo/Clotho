@@ -1,6 +1,10 @@
-# Clotho
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" alt="Clotho Logo" width="128" height="128">
+</p>
 
-A task management desktop application built with Tauri 2, React 19, and TypeScript.
+<h1 align="center">Clotho</h1>
+
+<p align="center">A task management desktop application built with Tauri 2, React 19, and TypeScript.</p>
 
 ## Features
 
