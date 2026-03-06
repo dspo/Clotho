@@ -56,7 +56,7 @@ export function TaskImageSection({ taskId }: TaskImageSectionProps) {
   }, []);
 
   const handleCopyRef = useCallback((image: TaskImage) => {
-    const ref = `![${image.filename}](${image.filename})`;
+    const ref = `![${image.filename}](clotho://image/${image.id})`;
     navigator.clipboard.writeText(ref);
   }, []);
 

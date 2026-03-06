@@ -3,8 +3,11 @@ import { imageService } from '@/services/image-service';
 
 /**
  * Hook to resolve image references in markdown content.
- * Converts `![alt](filename.jpg)` to `![alt](data:image/...;base64,...)` for images
+ * Converts `![alt](filename.jpg)` to `![alt](clotho://image/{id})` for images
  * that exist in the task's image attachments.
+ *
+ * The `clotho://` protocol is handled by Tauri's custom protocol handler,
+ * which serves images directly as binary data with proper caching headers.
  */
 export function useResolvedMarkdown(taskId: string | null, markdown: string | null): string {
   const [resolved, setResolved] = useState(markdown ?? '');
@@ -29,7 +32,7 @@ export function useResolvedMarkdown(taskId: string | null, markdown: string | nu
         return;
       }
 
-      // Filter to only local file references (not URLs or data URIs)
+      // Filter to only local file references (not URLs, data URIs, or clotho:// protocol)
       const localRefs = matches.filter(([, , src]) => {
         return !src.startsWith('http://') &&
                !src.startsWith('https://') &&
@@ -42,7 +45,7 @@ export function useResolvedMarkdown(taskId: string | null, markdown: string | nu
         return;
       }
 
-      // Load images and build replacement map
+      // Load images metadata to build replacement map
       const replacements = new Map<string, string>();
 
       // Get all images for this task
@@ -57,19 +60,15 @@ export function useResolvedMarkdown(taskId: string | null, markdown: string | nu
       // Create a filename -> image map
       const imageByFilename = new Map(images.map(img => [img.filename, img]));
 
-      // Load each referenced image
+      // Build replacements for each filename reference -> clotho:// URL
       for (const [fullMatch, alt, filename] of localRefs) {
         if (cancelled) return;
 
         const image = imageByFilename.get(filename);
         if (image) {
-          try {
-            const base64 = await imageService.get(image.id);
-            const dataUrl = `data:${image.mime_type};base64,${base64}`;
-            replacements.set(fullMatch, `![${alt || filename}](${dataUrl})`);
-          } catch {
-            // Keep original reference if loading fails
-          }
+          // Convert to clotho:// protocol URL
+          const clothoUrl = `clotho://image/${image.id}`;
+          replacements.set(fullMatch, `![${alt || filename}](${clothoUrl})`);
         }
       }
 
