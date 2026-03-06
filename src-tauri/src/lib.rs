@@ -65,35 +65,36 @@ pub fn run() {
             // path is "/{image_id}", skip leading "/"
             let image_id = path.trim_start_matches('/');
 
-            // Get database connection from state
+            // Query image metadata (limit lock scope to just the query)
             let app = ctx.app_handle();
-            let state = app.state::<AppState>();
-            let conn = match state.db.lock() {
-                Ok(c) => c,
-                Err(_) => {
-                    return tauri::http::Response::builder()
-                        .status(500)
-                        .body(Vec::new())
-                        .unwrap();
-                }
-            };
+            let (filename, mime_type) = {
+                let state = app.state::<AppState>();
+                let conn = match state.db.lock() {
+                    Ok(c) => c,
+                    Err(_) => {
+                        return tauri::http::Response::builder()
+                            .status(500)
+                            .body(Vec::new())
+                            .unwrap();
+                    }
+                };
 
-            // Query image metadata
-            let result: Result<(String, String), rusqlite::Error> = conn.query_row(
-                "SELECT filename, mime_type FROM task_images WHERE id = ?1",
-                [image_id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            );
+                let result: Result<(String, String), rusqlite::Error> = conn.query_row(
+                    "SELECT filename, mime_type FROM task_images WHERE id = ?1",
+                    [image_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                );
 
-            let (filename, mime_type) = match result {
-                Ok(data) => data,
-                Err(_) => {
-                    return tauri::http::Response::builder()
-                        .status(404)
-                        .body(Vec::new())
-                        .unwrap();
+                match result {
+                    Ok(data) => data,
+                    Err(_) => {
+                        return tauri::http::Response::builder()
+                            .status(404)
+                            .body(Vec::new())
+                            .unwrap();
+                    }
                 }
-            };
+            }; // conn guard dropped here, before file IO
 
             // Build file path: images/{id}.{ext}
             let ext = filename.rsplit('.').next().unwrap_or("bin");
@@ -246,8 +247,6 @@ pub fn run() {
             commands::settings::update_settings,
             // image commands
             commands::image::upload_task_image,
-            commands::image::get_task_image,
-            commands::image::get_task_image_by_filename,
             commands::image::list_task_images,
             commands::image::delete_task_image,
             // mcp

@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::PathBuf;
-use base64::Engine;
 use tauri::{AppHandle, Manager, State};
 
 use crate::commands::lock_db;
@@ -65,38 +64,6 @@ pub fn upload_task_image(
 }
 
 #[tauri::command]
-pub fn get_task_image(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<String, AppError> {
-    let db = lock_db(&state)?;
-
-    let (filename, _mime_type): (String, String) = db
-        .query_row(
-            "SELECT filename, mime_type FROM task_images WHERE id = ?1",
-            [&id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("image {id}")),
-            other => AppError::Database(other),
-        })?;
-
-    // Determine stored filename (id.ext)
-    let ext = filename.rsplit('.').next().unwrap_or("bin");
-    let stored_filename = format!("{}.{}", id, ext);
-    let dir = images_dir(&app)?;
-    let file_path = dir.join(&stored_filename);
-
-    let bytes = fs::read(&file_path).map_err(|e| {
-        AppError::NotFound(format!("image file not found: {e}"))
-    })?;
-
-    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
-}
-
-#[tauri::command]
 pub fn list_task_images(
     state: State<'_, AppState>,
     task_id: String,
@@ -153,38 +120,4 @@ pub fn delete_task_image(
     let _ = fs::remove_file(&file_path);
 
     Ok(())
-}
-
-#[tauri::command]
-pub fn get_task_image_by_filename(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    task_id: String,
-    filename: String,
-) -> Result<String, AppError> {
-    let db = lock_db(&state)?;
-
-    // Find image by task_id and filename (use the most recent one if duplicates exist)
-    let (id, stored_filename, _mime_type): (String, String, String) = db
-        .query_row(
-            "SELECT id, filename, mime_type FROM task_images WHERE task_id = ?1 AND filename = ?2 ORDER BY created_at DESC LIMIT 1",
-            rusqlite::params![&task_id, &filename],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(format!("image {filename} in task {task_id}")),
-            other => AppError::Database(other),
-        })?;
-
-    // Determine stored filename (id.ext)
-    let ext = stored_filename.rsplit('.').next().unwrap_or("bin");
-    let disk_filename = format!("{}.{}", id, ext);
-    let dir = images_dir(&app)?;
-    let file_path = dir.join(&disk_filename);
-
-    let bytes = fs::read(&file_path).map_err(|e| {
-        AppError::NotFound(format!("image file not found: {e}"))
-    })?;
-
-    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
 }

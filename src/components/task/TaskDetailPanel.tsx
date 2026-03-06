@@ -49,7 +49,7 @@ export function TaskDetailPanel() {
   const [descriptionValue, setDescriptionValue] = useState('');
   const [showFormatChooser, setShowFormatChooser] = useState(false);
 
-  // Resolve image references in markdown (e.g., ![](花束.jpg) -> data URL)
+  // Resolve image references in markdown (e.g., ![](花束.jpg) -> clotho://image/{id})
   const resolvedDescription = useResolvedMarkdown(task?.id ?? null, task?.description ?? null);
 
   // Fetch task detail when taskId changes
