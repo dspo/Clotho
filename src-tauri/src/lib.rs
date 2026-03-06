@@ -49,6 +49,114 @@ fn load_mcp_settings(db: &rusqlite::Connection) -> (bool, String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .register_uri_scheme_protocol("clotho", |ctx, request| {
+            let uri = request.uri();
+            let host = uri.host().unwrap_or("");
+            let path = uri.path();
+
+            // Handle clotho://image/{image_id} where host="image" and path="/{image_id}"
+            if host != "image" {
+                return tauri::http::Response::builder()
+                    .status(404)
+                    .body(Vec::new())
+                    .unwrap();
+            }
+
+            // path is "/{image_id}", skip leading "/"
+            let image_id = path.trim_start_matches('/');
+
+            // Query image metadata (limit lock scope to just the query)
+            let app = ctx.app_handle();
+            let (filename, mime_type) = {
+                let state = app.state::<AppState>();
+                let conn = match state.db.lock() {
+                    Ok(c) => c,
+                    Err(_) => {
+                        return tauri::http::Response::builder()
+                            .status(500)
+                            .body(Vec::new())
+                            .unwrap();
+                    }
+                };
+
+                let result: Result<(String, String), rusqlite::Error> = conn.query_row(
+                    "SELECT filename, mime_type FROM task_images WHERE id = ?1",
+                    [image_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                );
+
+                match result {
+                    Ok(data) => data,
+                    Err(_) => {
+                        return tauri::http::Response::builder()
+                            .status(404)
+                            .body(Vec::new())
+                            .unwrap();
+                    }
+                }
+            }; // conn guard dropped here, before file IO
+
+            // Build file path: images/{id}.{ext}
+            // Sanitize ext to prevent path traversal (only allow alphanumeric chars)
+            let raw_ext = filename.rsplit('.').next().unwrap_or("bin");
+            let sanitized_ext: String = raw_ext
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect();
+            let ext = if sanitized_ext.is_empty() { "bin" } else { &sanitized_ext };
+            let stored_filename = format!("{}.{}", image_id, ext);
+
+            let images_dir = match app.path().app_data_dir() {
+                Ok(dir) => dir.join("images"),
+                Err(_) => {
+                    return tauri::http::Response::builder()
+                        .status(500)
+                        .body(Vec::new())
+                        .unwrap();
+                }
+            };
+
+            let file_path = images_dir.join(&stored_filename);
+
+            // Read file
+            let bytes = match std::fs::read(&file_path) {
+                Ok(b) => b,
+                Err(_) => {
+                    return tauri::http::Response::builder()
+                        .status(404)
+                        .body(Vec::new())
+                        .unwrap();
+                }
+            };
+
+            // Validate mime_type, fallback to application/octet-stream if invalid
+            // Reject empty, NUL, CR, LF to prevent header injection
+            let content_type = if mime_type.is_empty()
+                || mime_type.contains('\0')
+                || mime_type.contains('\r')
+                || mime_type.contains('\n')
+            {
+                "application/octet-stream".to_string()
+            } else {
+                mime_type
+            };
+
+            match tauri::http::Response::builder()
+                .status(200)
+                .header("Content-Type", content_type)
+                .header("Cache-Control", "max-age=31536000, immutable")
+                .body(bytes)
+            {
+                Ok(resp) => resp,
+                Err(_) => {
+                    // Fallback if header construction fails (return empty body)
+                    tauri::http::Response::builder()
+                        .status(500)
+                        .body(Vec::new())
+                        .unwrap()
+                }
+            }
+        })
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -166,7 +274,6 @@ pub fn run() {
             commands::settings::update_settings,
             // image commands
             commands::image::upload_task_image,
-            commands::image::get_task_image,
             commands::image::list_task_images,
             commands::image::delete_task_image,
             // mcp
