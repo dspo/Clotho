@@ -28,6 +28,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { useTaskStore } from '@/stores/task-store';
 import { useTagStore } from '@/stores/tag-store';
 import { taskService } from '@/services/task-service';
+import { useResolvedMarkdown } from '@/hooks/useResolvedMarkdown';
 import type { TaskDetail, TaskStatus, TaskPriority, TaskDifficulty, DescriptionFormat } from '@/types/task';
 import { VisuallyHidden } from 'radix-ui';
 
@@ -47,6 +48,9 @@ export function TaskDetailPanel() {
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState('');
   const [showFormatChooser, setShowFormatChooser] = useState(false);
+
+  // Resolve image references in markdown (e.g., ![](花束.jpg) -> data URL)
+  const resolvedDescription = useResolvedMarkdown(task?.id ?? null, task?.description ?? null);
 
   // Fetch task detail when taskId changes
   useEffect(() => {
@@ -85,6 +89,15 @@ export function TaskDetailPanel() {
       updateTask(task.id, { description: descriptionValue || undefined });
       setTask({ ...task, description: descriptionValue || null });
       showSaved();
+    }
+    setEditingDescription(false);
+  };
+
+  const handleDescriptionKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // ⌘ Enter to submit
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
     }
   };
 
@@ -157,7 +170,7 @@ export function TaskDetailPanel() {
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) closePanel(); }}>
       <DialogContent
         showCloseButton={false}
-        className="max-w-4xl h-[80vh] min-w-[640px] min-h-[480px] flex flex-col p-0 gap-0"
+        className="max-w-4xl h-[80vh] max-h-[80vh] min-w-[640px] min-h-[480px] flex flex-col p-0 gap-0 overflow-hidden"
         onKeyDown={(e) => {
           if (e.metaKey || e.ctrlKey) return;
           const target = e.target as HTMLElement;
@@ -229,7 +242,7 @@ export function TaskDetailPanel() {
             </div>
 
             {/* Main scrollable content */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 min-h-0">
               <div className="space-y-4 p-6">
                 {/* Description */}
                 <div className="space-y-1.5">
@@ -275,6 +288,7 @@ export function TaskDetailPanel() {
                         value={descriptionValue}
                         onChange={(e) => setDescriptionValue(e.target.value)}
                         onBlur={handleDescriptionBlur}
+                        onKeyDown={handleDescriptionKeyDown}
                         autoFocus
                         placeholder="Write markdown here..."
                         className="w-full min-h-[160px] rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -283,24 +297,26 @@ export function TaskDetailPanel() {
                       <RichTextEditor
                         value={descriptionValue}
                         onChange={setDescriptionValue}
-                        onBlur={handleDescriptionBlur}
+                        onSubmit={handleDescriptionBlur}
                         placeholder="Add a description..."
                         className="min-h-[160px]"
                       />
                     )
                   ) : (
                     <div
-                      className="cursor-pointer rounded px-1 -mx-1 py-1 text-sm hover:bg-muted/50 min-h-[80px]"
-                      onClick={handleDescriptionClick}
+                      className="rounded px-1 -mx-1 py-1 text-sm min-h-[80px]"
+                      onDoubleClick={handleDescriptionClick}
                     >
                       {task.description ? (
                         <RichTextEditor
-                          value={task.description}
+                          value={resolvedDescription}
                           onChange={() => {}}
                           readOnly
                         />
                       ) : (
-                        <span className="text-muted-foreground">Add a description...</span>
+                        <span className="text-muted-foreground cursor-pointer" onClick={handleDescriptionClick}>
+                          Add a description...
+                        </span>
                       )}
                     </div>
                   )}

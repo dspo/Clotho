@@ -167,6 +167,7 @@ pub fn run() {
             // image commands
             commands::image::upload_task_image,
             commands::image::get_task_image,
+            commands::image::get_task_image_by_filename,
             commands::image::list_task_images,
             commands::image::delete_task_image,
             // mcp

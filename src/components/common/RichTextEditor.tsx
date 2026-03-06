@@ -5,9 +5,18 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
-import { Markdown } from '@tiptap/markdown';
+import { Markdown, MarkdownStorage } from 'tiptap-markdown';
+import { defaultMarkdownSerializer, MarkdownSerializerState } from 'prosemirror-markdown';
+import { Node as PmNode } from 'prosemirror-model';
 import { cn } from '@/lib/utils';
 import { SlashMenu, SlashMenuExtension } from './SlashMenu';
+
+// Extend Tiptap Storage type to include markdown
+declare module '@tiptap/core' {
+  interface Storage {
+    markdown: MarkdownStorage;
+  }
+}
 
 // Exit heading on Enter when the current heading is empty (standard editor behavior)
 const HeadingExitExtension = Extension.create({
@@ -26,10 +35,69 @@ const HeadingExitExtension = Extension.create({
   },
 });
 
+// Submit extension: ⌘Enter to submit and blur
+const createSubmitExtension = (onSubmit: () => void) =>
+  Extension.create({
+    name: 'submit',
+    addKeyboardShortcuts() {
+      return {
+        'Mod-Enter': ({ editor }) => {
+          onSubmit();
+          editor.commands.blur();
+          return true;
+        },
+      };
+    },
+  });
+
+// Link extension with markdown serialization support - singleton instance
+// openOnClick is disabled; we handle link clicks manually in readOnly mode
+const MarkdownLinkExtension = Link.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize: defaultMarkdownSerializer.marks.link,
+        parse: {
+          // handled by markdown-it
+        },
+      },
+    };
+  },
+}).configure({
+  openOnClick: false,
+  HTMLAttributes: {
+    class: 'text-primary underline underline-offset-2 cursor-pointer',
+  },
+});
+
+// Image extension with markdown support for tiptap-markdown
+const MarkdownImageExtension = Image.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: MarkdownSerializerState, node: PmNode) {
+          state.write(`![${node.attrs.alt || ''}](${node.attrs.src})`);
+        },
+        parse: {
+          // This tells tiptap-markdown to use this extension for images
+        },
+      },
+    };
+  },
+}).configure({
+  inline: true, // Allow images inline with text
+  allowBase64: true, // Important: allow base64 data URLs
+  HTMLAttributes: {
+    class: 'rounded-md max-w-full h-auto',
+  },
+});
+
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
+  /** Called when user submits with ⌘Enter or blur. Editor will lose focus after submit. */
+  onSubmit?: () => void;
   placeholder?: string;
   readOnly?: boolean;
   className?: string;
@@ -39,6 +107,7 @@ export function RichTextEditor({
   value,
   onChange,
   onBlur,
+  onSubmit,
   placeholder = 'Type / for commands...',
   readOnly = false,
   className,
@@ -47,6 +116,8 @@ export function RichTextEditor({
   onChangeRef.current = onChange;
   const onBlurRef = useRef(onBlur);
   onBlurRef.current = onBlur;
+  const onSubmitRef = useRef(onSubmit);
+  onSubmitRef.current = onSubmit;
 
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -56,6 +127,8 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        // Disable link from StarterKit - we use our own MarkdownLinkExtension
+        link: false,
         codeBlock: {
           HTMLAttributes: {
             class: 'rounded-md bg-muted p-3 font-mono text-sm',
@@ -74,20 +147,11 @@ export function RichTextEditor({
         placeholder,
         emptyNodeClass: 'before:content-[attr(data-placeholder)] before:text-muted-foreground/50 before:float-left before:h-0 before:pointer-events-none',
       }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-primary underline underline-offset-2 cursor-pointer',
-        },
-      }),
-      Image.configure({
-        inline: false,
-        HTMLAttributes: {
-          class: 'rounded-md max-w-full h-auto',
-        },
-      }),
+      MarkdownLinkExtension,
+      MarkdownImageExtension,
       Markdown,
       HeadingExitExtension,
+      createSubmitExtension(() => onSubmitRef.current?.()),
       SlashMenuExtension.configure({
         onOpen: ({ query, clientRect }) => {
           setSlashQuery(query);
@@ -111,26 +175,17 @@ export function RichTextEditor({
         },
       }),
     ],
-    content: '',
+    content: value || '',
     editable: !readOnly,
-    onCreate: ({ editor: ed }) => {
-      if (value) {
-        // Use the markdown manager's parse method for proper markdown rendering
-        const mdManager = ed.storage.markdown?.manager;
-        if (mdManager) {
-          const parsed = mdManager.parse(value);
-          ed.commands.setContent(parsed);
-        } else {
-          ed.commands.setContent(value);
-        }
-      }
-    },
+    immediatelyRender: false,
     onUpdate: ({ editor: ed }) => {
-      const md = ed.getMarkdown();
+      // tiptap-markdown: use storage.markdown.getMarkdown()
+      const md = ed.storage.markdown.getMarkdown();
       onChangeRef.current(md);
     },
     onBlur: () => {
       onBlurRef.current?.();
+      onSubmitRef.current?.();
     },
     editorProps: {
       attributes: {
@@ -158,15 +213,11 @@ export function RichTextEditor({
   // Sync external value changes
   useEffect(() => {
     if (!editor) return;
-    const currentMd = editor.getMarkdown();
+    // tiptap-markdown: getMarkdown() is on storage.markdown
+    const currentMd = editor.storage.markdown?.getMarkdown() || '';
     if (currentMd !== value && !editor.isFocused) {
-      const mdManager = editor.storage.markdown?.manager;
-      if (mdManager) {
-        const parsed = mdManager.parse(value || '');
-        editor.commands.setContent(parsed);
-      } else {
-        editor.commands.setContent(value || '');
-      }
+      // tiptap-markdown: setContent automatically parses markdown
+      editor.commands.setContent(value || '');
     }
   }, [editor, value]);
 
@@ -246,6 +297,23 @@ export function RichTextEditor({
     [editor, slashQuery],
   );
 
+  // Handle link clicks in readOnly mode
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!readOnly) return;
+      const target = e.target as HTMLElement;
+      const link = target.closest('a');
+      if (link) {
+        e.preventDefault();
+        const href = link.getAttribute('href');
+        if (href) {
+          window.open(href, '_blank', 'noopener,noreferrer');
+        }
+      }
+    },
+    [readOnly],
+  );
+
   return (
     <div
       ref={editorContainerRef}
@@ -255,6 +323,7 @@ export function RichTextEditor({
         !readOnly && 'focus-within:ring-1 focus-within:ring-ring',
         className,
       )}
+      onClick={handleClick}
     >
       <EditorContent
         editor={editor}

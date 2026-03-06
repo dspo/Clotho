@@ -11,6 +11,9 @@ export const imageService = {
   get: (id: string) =>
     invoke<string>('get_task_image', { id }),
 
+  getByFilename: (taskId: string, filename: string) =>
+    invoke<string>('get_task_image_by_filename', { taskId, filename }),
+
   delete: (id: string) =>
     invoke('delete_task_image', { id }),
 };
