@@ -305,9 +305,10 @@ export function RichTextEditor({
       const target = e.target as HTMLElement;
       const link = target.closest('a');
       if (link) {
-        e.preventDefault();
         const href = link.getAttribute('href');
+        // Only handle http/https links; let other schemes (mailto:, #anchor, etc.) work normally
         if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+          e.preventDefault();
           openUrl(href).catch(() => {
             // Fallback for dev mode or if plugin fails
             window.open(href, '_blank', 'noopener,noreferrer');

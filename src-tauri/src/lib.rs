@@ -123,12 +123,28 @@ pub fn run() {
                 }
             };
 
-            tauri::http::Response::builder()
+            // Validate mime_type, fallback to application/octet-stream if invalid
+            let content_type = if mime_type.is_empty() || mime_type.contains('\0') {
+                "application/octet-stream".to_string()
+            } else {
+                mime_type
+            };
+
+            match tauri::http::Response::builder()
                 .status(200)
-                .header("Content-Type", mime_type)
+                .header("Content-Type", content_type)
                 .header("Cache-Control", "max-age=31536000, immutable")
-                .body(bytes)
-                .unwrap()
+                .body(bytes.clone())
+            {
+                Ok(resp) => resp,
+                Err(_) => {
+                    // Fallback if header construction fails
+                    tauri::http::Response::builder()
+                        .status(200)
+                        .body(bytes)
+                        .unwrap()
+                }
+            }
         })
         .setup(|app| {
             let app_data_dir = app

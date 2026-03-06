@@ -18,6 +18,12 @@ export function useResolvedMarkdown(taskId: string | null, markdown: string | nu
       return;
     }
 
+    // Quick check: if no image syntax present, skip the backend call
+    if (!markdown.includes('![')) {
+      setResolved(markdown);
+      return;
+    }
+
     let cancelled = false;
     const tid = taskId;
     const md = markdown;
@@ -34,13 +40,20 @@ export function useResolvedMarkdown(taskId: string | null, markdown: string | nu
 
       if (cancelled) return;
 
+      // If no images attached, nothing to resolve
+      if (images.length === 0) {
+        setResolved(md);
+        return;
+      }
+
       // Create a filename -> image map
       const imageByFilename = new Map(images.map(img => [img.filename, img]));
 
       // Replace all local image references with clotho:// URLs
-      // Use replaceAll with callback to handle multiple occurrences
-      const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-      const result = md.replace(imageRegex, (match, alt, src) => {
+      // Using String.replace with a global regex and callback to handle all occurrences
+      // Supports: ![alt](src) and ![alt](src "title")
+      const imageRegex = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+      const result = md.replace(imageRegex, (match, _alt, src) => {
         // Skip URLs, data URIs, and already-converted clotho:// URLs
         if (src.startsWith('http://') ||
             src.startsWith('https://') ||
@@ -51,8 +64,8 @@ export function useResolvedMarkdown(taskId: string | null, markdown: string | nu
 
         const image = imageByFilename.get(src);
         if (image) {
-          // Preserve original alt text exactly
-          return `![${alt}](clotho://image/${image.id})`;
+          // Preserve original alt text exactly, replace only the src part
+          return match.replace(src, `clotho://image/${image.id}`);
         }
 
         return match;
