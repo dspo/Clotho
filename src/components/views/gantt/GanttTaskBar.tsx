@@ -81,11 +81,14 @@ export function GanttTaskBar({
   const barY = y + BAR_TOP_OFFSET;
   const isDone = task.status === 'done';
   const isCancelled = task.status === 'cancelled';
+  const isCompleted = isDone || isCancelled;
   const isTodo = task.status === 'todo';
   const isInProgress = task.status === 'in_progress';
   const isActiveStatus = isTodo || isInProgress;
   const barColor = softenHexColor(color);
   const gradientId = `gradient-${clipId}`;
+  const completedOpacity = isCompleted ? 0.62 : 1;
+  const completedTextOpacity = isCompleted ? 0.88 : 1;
 
   // Show name in bar if wide enough
   const showNameInBar = width >= 50;
@@ -290,7 +293,7 @@ export function GanttTaskBar({
         rx={4}
         ry={4}
         fill={dragState?.overUnscheduled ? '#ef4444' : isActiveStatus ? `url(#${gradientId})` : barColor}
-        opacity={dragState?.overUnscheduled ? 0.3 : 1}
+        opacity={dragState?.overUnscheduled ? 0.3 : completedOpacity}
         className="hover:brightness-105 transition-all"
       />
 
@@ -329,13 +332,14 @@ export function GanttTaskBar({
       {showNameInBar && (
         <>
           {/* Status icon for done/cancelled tasks */}
-          {(isDone || isCancelled) && (
+          {isCompleted && (
             <foreignObject
               x={displayX + 4}
               y={displayY + BAR_HEIGHT / 2 - 5}
               width={10}
               height={10}
               className="pointer-events-none"
+              opacity={completedTextOpacity}
             >
               <div className="h-2.5 w-2.5 text-white">
                 {isDone ? <CheckCircle2 className="h-2.5 w-2.5" /> : <XCircle className="h-2.5 w-2.5" />}
@@ -350,6 +354,7 @@ export function GanttTaskBar({
             className="pointer-events-none select-none"
             clipPath={`url(#${clipId})`}
             textDecoration={isDone || isCancelled ? 'line-through' : undefined}
+            opacity={completedTextOpacity}
           >
             {displayTitle}
           </text>
@@ -360,13 +365,14 @@ export function GanttTaskBar({
       {showNameOnRight && (
         <text
           x={displayX + displayWidth + 6}
-          y={displayY + BAR_HEIGHT / 2 + 4}
-          fontSize={11}
-          fill="currentColor"
-          className="pointer-events-none select-none opacity-70"
-        >
-          {task.title}
-        </text>
+        y={displayY + BAR_HEIGHT / 2 + 4}
+        fontSize={11}
+        fill="currentColor"
+        className="pointer-events-none select-none"
+        opacity={isCompleted ? 0.5 : 0.7}
+      >
+        {task.title}
+      </text>
       )}
 
       {/* Left resize handle */}
