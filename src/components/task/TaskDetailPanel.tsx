@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Type, Code, Check, X, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ import { useTagStore } from '@/stores/tag-store';
 import { taskService } from '@/services/task-service';
 import { useResolvedMarkdown } from '@/hooks/useResolvedMarkdown';
 import type { TaskDetail, TaskStatus, TaskPriority, TaskDifficulty, DescriptionFormat } from '@/types/task';
+import type { Tag } from '@/types/tag';
 import { VisuallyHidden } from 'radix-ui';
 
 export function TaskDetailPanel() {
@@ -39,6 +41,8 @@ export function TaskDetailPanel() {
   const updateTask = useTaskStore((s) => s.updateTask);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const allTags = useTagStore((s) => s.tags);
+  const fetchTags = useTagStore((s) => s.fetchTags);
+  const createTag = useTagStore((s) => s.createTag);
 
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,6 +69,11 @@ export function TaskDetailPanel() {
       setTask(null);
     }
   }, [taskId]);
+
+  useEffect(() => {
+    if (!open || !taskId || allTags.length > 0) return;
+    void fetchTags();
+  }, [open, taskId, allTags.length, fetchTags]);
 
   useEffect(() => {
     if (task) {
@@ -129,6 +138,24 @@ export function TaskDetailPanel() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => setSaveIndicator('idle'), 2000);
   }, []);
+
+  const handleCreateTag = useCallback(async (name: string, color: string): Promise<Tag> => {
+    try {
+      return await createTag({ name, color });
+    } catch (error) {
+      const message = String(error).toLowerCase();
+      if (message.includes('already exists') || message.includes('conflict')) {
+        await fetchTags();
+        const existing = useTagStore
+          .getState()
+          .tags
+          .find((tag) => tag.name.toLowerCase() === name.toLowerCase());
+        if (existing) return existing;
+      }
+      toast.error('Failed to create tag');
+      throw error;
+    }
+  }, [createTag, fetchTags]);
 
   const handleFormChange = (update: Partial<{ status: TaskStatus; priority: TaskPriority; difficulty: TaskDifficulty | null; startDate: string | null; dueDate: string | null; tagIds: string[]; estimatedHours: number | null; actualHours: number | null }>) => {
     if (!task) return;
@@ -239,6 +266,7 @@ export function TaskDetailPanel() {
                 }}
                 onChange={handleFormChange}
                 allTags={allTags}
+                onCreateTag={handleCreateTag}
                 showActualHours
               />
             </div>
