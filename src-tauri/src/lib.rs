@@ -258,6 +258,8 @@ pub fn run() {
             commands::task::reorder_tasks,
             commands::task::batch_update_tasks,
             commands::task::search_tasks,
+            commands::task::list_task_progress,
+            commands::task::add_task_progress,
             // tag commands
             commands::tag::list_tags,
             commands::tag::create_tag,

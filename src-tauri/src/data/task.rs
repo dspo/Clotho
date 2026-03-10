@@ -46,6 +46,16 @@ pub struct TaskDetailData {
     pub subtasks: Vec<TaskData>,
 }
 
+/// Task progress item.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct TaskProgressData {
+    pub id: String,
+    pub task_id: String,
+    pub content: String,
+    pub content_format: Option<String>,
+    pub created_at: String,
+}
+
 /// Input for creating a new task.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 pub struct CreateTaskInput {

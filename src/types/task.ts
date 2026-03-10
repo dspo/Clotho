@@ -77,3 +77,11 @@ export interface TaskImage {
   size: number;
   created_at: string;
 }
+
+export interface TaskProgress {
+  id: string;
+  task_id: string;
+  content: string;
+  content_format: DescriptionFormat | null;
+  created_at: string;
+}
