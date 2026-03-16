@@ -30,7 +30,6 @@ import { useUIStore } from '@/stores/ui-store';
 import { useTaskStore } from '@/stores/task-store';
 import { useTagStore } from '@/stores/tag-store';
 import { taskService } from '@/services/task-service';
-import { tagService } from '@/services/tag-service';
 import { useResolvedMarkdown } from '@/hooks/useResolvedMarkdown';
 import type { TaskDetail, TaskStatus, TaskPriority, TaskDifficulty, DescriptionFormat, TaskProgress } from '@/types/task';
 import type { Tag } from '@/types/tag';
@@ -196,19 +195,18 @@ export function TaskDetailPanel() {
       console.error(error);
     }
   };
-
   const handleCreateTag = useCallback(async (name: string, color: string): Promise<Tag> => {
     try {
       return await createTag({ name, color });
     } catch (error) {
       const message = String(error).toLowerCase();
       if (message.includes('already exists') || message.includes('conflict')) {
-        const latestTags = await tagService.list();
-        const existing = latestTags.find((tag) => tag.name.toLowerCase() === name.toLowerCase());
-        if (existing) {
-          await fetchTags();
-          return existing;
-        }
+        await fetchTags();
+        const existing = useTagStore
+          .getState()
+          .tags
+          .find((tag) => tag.name.toLowerCase() === name.toLowerCase());
+        if (existing) return existing;
       }
       toast.error('Failed to create tag');
       throw error;
