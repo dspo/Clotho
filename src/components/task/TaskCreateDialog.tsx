@@ -13,6 +13,7 @@ import { RichTextEditor } from '@/components/common/RichTextEditor';
 import { TaskForm } from '@/components/task/TaskForm';
 import type { TaskFormValue } from '@/components/task/TaskForm';
 import { useTagStore } from '@/stores/tag-store';
+import { tagService } from '@/services/tag-service';
 import type { CreateTaskInput, TaskStatus, TaskPriority, DescriptionFormat } from '@/types/task';
 import type { Tag } from '@/types/tag';
 import { VisuallyHidden } from 'radix-ui';
@@ -122,12 +123,12 @@ export function TaskCreateDialog({
     } catch (error) {
       const message = String(error).toLowerCase();
       if (message.includes('already exists') || message.includes('conflict')) {
-        await fetchTags();
-        const existing = useTagStore
-          .getState()
-          .tags
-          .find((tag) => tag.name.toLowerCase() === name.toLowerCase());
-        if (existing) return existing;
+        const latestTags = await tagService.list();
+        const existing = latestTags.find((tag) => tag.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          await fetchTags();
+          return existing;
+        }
       }
       toast.error('Failed to create tag');
       throw error;
