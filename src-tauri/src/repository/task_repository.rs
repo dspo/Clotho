@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 
 use crate::data::{
-    CreateTaskInput, ListTasksFilter, TaskData, TaskDetailData, TaskWithTagsData, UpdateTaskInput,
+    CreateTaskInput, ListTasksFilter, TaskData, TaskDetailData, TaskProgressData, TaskWithTagsData, UpdateTaskInput,
 };
 use crate::error::AppError;
 use crate::models::tag::Tag;
@@ -89,6 +89,58 @@ impl TaskRepository {
         let tags = Self::get_tags_for_task(conn, id)?;
         let subtasks = Self::get_subtasks(conn, id)?;
         Ok(TaskDetailData { task, tags, subtasks })
+    }
+
+    /// List progress entries for a task in reverse chronological order.
+    pub fn list_progress(conn: &Connection, task_id: &str) -> Result<Vec<TaskProgressData>, AppError> {
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, content, content_format, created_at \
+             FROM task_progress \
+             WHERE task_id = ?1 \
+             ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map([task_id], row_to_task_progress_data)?;
+        let mut progress = Vec::new();
+        for row in rows {
+            progress.push(row?);
+        }
+        Ok(progress)
+    }
+
+    /// Add a progress entry for a task.
+    pub fn add_progress(
+        conn: &Connection,
+        task_id: &str,
+        content: &str,
+        content_format: Option<&str>,
+    ) -> Result<TaskProgressData, AppError> {
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM tasks WHERE id = ?1 AND deleted_at IS NULL",
+                [task_id],
+                |row| row.get(0),
+            )
+            .map_err(AppError::Database)?;
+        if !exists {
+            return Err(AppError::NotFound(format!("task {task_id}")));
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+        conn.execute(
+            "INSERT INTO task_progress (id, task_id, content, content_format, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![&id, task_id, content, &content_format, &now],
+        )?;
+
+        Ok(TaskProgressData {
+            id,
+            task_id: task_id.to_string(),
+            content: content.to_string(),
+            content_format: content_format.map(std::string::ToString::to_string),
+            created_at: now,
+        })
     }
 
     /// Create a new task.
@@ -499,5 +551,16 @@ fn row_to_task_data(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskData> {
         actual_hours: row.get(16)?,
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
+    })
+}
+
+/// Map a database row to TaskProgressData.
+fn row_to_task_progress_data(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskProgressData> {
+    Ok(TaskProgressData {
+        id: row.get(0)?,
+        task_id: row.get(1)?,
+        content: row.get(2)?,
+        content_format: row.get(3)?,
+        created_at: row.get(4)?,
     })
 }

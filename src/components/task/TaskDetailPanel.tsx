@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Type, Code, Check, X, Trash2 } from 'lucide-react';
+import { Type, Code, Check, X, Trash2, Plus } from 'lucide-react';
+import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -30,9 +31,16 @@ import { useTaskStore } from '@/stores/task-store';
 import { useTagStore } from '@/stores/tag-store';
 import { taskService } from '@/services/task-service';
 import { useResolvedMarkdown } from '@/hooks/useResolvedMarkdown';
-import type { TaskDetail, TaskStatus, TaskPriority, TaskDifficulty, DescriptionFormat } from '@/types/task';
+import type { TaskDetail, TaskStatus, TaskPriority, TaskDifficulty, DescriptionFormat, TaskProgress } from '@/types/task';
 import type { Tag } from '@/types/tag';
 import { VisuallyHidden } from 'radix-ui';
+
+function formatDateTime(value: string): string {
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+  return format(date, 'MMM d, yyyy HH:mm');
+}
 
 export function TaskDetailPanel() {
   const open = useUIStore((s) => s.detailPanelOpen);
@@ -52,6 +60,12 @@ export function TaskDetailPanel() {
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState('');
   const [showFormatChooser, setShowFormatChooser] = useState(false);
+  const [progressItems, setProgressItems] = useState<TaskProgress[]>([]);
+  const [loadingProgress, setLoadingProgress] = useState(false);
+  const [addingProgress, setAddingProgress] = useState(false);
+  const [progressValue, setProgressValue] = useState('');
+  const [progressFormat, setProgressFormat] = useState<DescriptionFormat | null>(null);
+  const [showProgressFormatChooser, setShowProgressFormatChooser] = useState(false);
 
   // Resolve image references in markdown (e.g., ![](花束.jpg) -> clotho://image/{id})
   const resolvedDescription = useResolvedMarkdown(task?.id ?? null, task?.description ?? null);
@@ -60,13 +74,23 @@ export function TaskDetailPanel() {
   useEffect(() => {
     if (taskId) {
       setLoading(true);
-      taskService
-        .get(taskId)
-        .then(setTask)
-        .catch(() => setTask(null))
-        .finally(() => setLoading(false));
+      setLoadingProgress(true);
+      Promise.all([taskService.get(taskId), taskService.listProgress(taskId)])
+        .then(([detail, progress]) => {
+          setTask(detail);
+          setProgressItems(progress);
+        })
+        .catch(() => {
+          setTask(null);
+          setProgressItems([]);
+        })
+        .finally(() => {
+          setLoading(false);
+          setLoadingProgress(false);
+        });
     } else {
       setTask(null);
+      setProgressItems([]);
     }
   }, [taskId]);
 
@@ -82,6 +106,10 @@ export function TaskDetailPanel() {
       setEditingTitle(false);
       setEditingDescription(false);
       setShowFormatChooser(false);
+      setAddingProgress(false);
+      setProgressValue('');
+      setProgressFormat(null);
+      setShowProgressFormatChooser(false);
     }
   }, [task]);
 
@@ -139,6 +167,34 @@ export function TaskDetailPanel() {
     saveTimerRef.current = setTimeout(() => setSaveIndicator('idle'), 2000);
   }, []);
 
+  const handleAddProgressClick = () => {
+    setAddingProgress(true);
+    if (progressFormat === null) {
+      setShowProgressFormatChooser(true);
+    }
+  };
+
+  const handleProgressFormatSelect = (fmt: DescriptionFormat) => {
+    setProgressFormat(fmt);
+    setShowProgressFormatChooser(false);
+  };
+
+  const handleSubmitProgress = async () => {
+    if (!task) return;
+    const content = progressValue.trim();
+    if (!content) return;
+
+    const formatToSave = progressFormat ?? task.description_format ?? 'markdown';
+    try {
+      const created = await taskService.addProgress(task.id, content, formatToSave);
+      setProgressItems((prev) => [created, ...prev]);
+      setProgressValue('');
+      setAddingProgress(false);
+      setShowProgressFormatChooser(false);
+    } catch (error) {
+      console.error(error);
+    }
+  };
   const handleCreateTag = useCallback(async (name: string, color: string): Promise<Tag> => {
     try {
       return await createTag({ name, color });
@@ -383,6 +439,121 @@ export function TaskDetailPanel() {
                     </div>
                   </div>
                 )}
+
+                <Separator />
+
+                {/* Progress */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Progress
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5"
+                      onClick={handleAddProgressClick}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Progress
+                    </Button>
+                  </div>
+
+                  {addingProgress && (
+                    <div className="rounded-md border p-3 space-y-2">
+                      {showProgressFormatChooser ? (
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex-1 h-auto flex-col gap-1.5 py-3"
+                            onClick={() => handleProgressFormatSelect('richtext')}
+                          >
+                            <Type className="h-4 w-4" />
+                            <span className="text-xs font-medium">Rich Text</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex-1 h-auto flex-col gap-1.5 py-3"
+                            onClick={() => handleProgressFormatSelect('markdown')}
+                          >
+                            <Code className="h-4 w-4" />
+                            <span className="text-xs font-medium">Markdown</span>
+                          </Button>
+                        </div>
+                      ) : progressFormat === 'markdown' ? (
+                        <textarea
+                          value={progressValue}
+                          onChange={(e) => setProgressValue(e.target.value)}
+                          placeholder="Write today's progress..."
+                          className="w-full min-h-[120px] rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      ) : (
+                        <RichTextEditor
+                          value={progressValue}
+                          onChange={setProgressValue}
+                          placeholder="Write today's progress..."
+                          className="min-h-[120px]"
+                        />
+                      )}
+
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setAddingProgress(false);
+                            setProgressValue('');
+                            setShowProgressFormatChooser(false);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!progressValue.trim()}
+                          onClick={() => {
+                            void handleSubmitProgress();
+                          }}
+                        >
+                          Save Progress
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {loadingProgress ? (
+                    <p className="text-xs text-muted-foreground">Loading progress...</p>
+                  ) : progressItems.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No progress updates yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {progressItems.map((item) => (
+                        <div key={item.id} className="flex gap-3">
+                          <div className="flex flex-col items-center">
+                            <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
+                            <span className="mt-1 h-full w-px bg-border" />
+                          </div>
+                          <div className="flex-1 rounded-md border p-3 space-y-1.5">
+                            <p className="text-xs text-muted-foreground">
+                              {formatDateTime(item.created_at)}
+                            </p>
+                            <RichTextEditor
+                              value={item.content}
+                              onChange={() => {}}
+                              readOnly
+                              className="min-h-0"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </ScrollArea>
 

@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { TaskWithTags, TaskDetail, CreateTaskInput, UpdateTaskInput, TaskStatus } from '@/types/task';
+import type { TaskWithTags, TaskDetail, CreateTaskInput, UpdateTaskInput, TaskStatus, DescriptionFormat, TaskProgress } from '@/types/task';
 
 /**
  * Normalize status and dates based on unscheduled rules:
@@ -83,4 +83,10 @@ export const taskService = {
 
   reorder: (taskIds: string[], orderField: string) =>
     invoke('reorder_tasks', { taskIds, orderField }),
+
+  listProgress: (taskId: string) =>
+    invoke<TaskProgress[]>('list_task_progress', { taskId }),
+
+  addProgress: (taskId: string, content: string, contentFormat?: DescriptionFormat) =>
+    invoke<TaskProgress>('add_task_progress', { taskId, content, contentFormat: contentFormat ?? null }),
 };

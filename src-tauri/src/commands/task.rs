@@ -2,7 +2,7 @@ use tauri::State;
 
 use crate::commands::lock_db;
 use crate::data::{
-    CreateTaskInput, ListTasksFilter, TaskData, TaskDetailData, TaskWithTagsData, UpdateTaskInput,
+    CreateTaskInput, ListTasksFilter, TaskData, TaskDetailData, TaskProgressData, TaskWithTagsData, UpdateTaskInput,
 };
 use crate::error::AppError;
 use crate::repository::TaskRepository;
@@ -144,4 +144,24 @@ pub fn search_tasks(
 ) -> Result<Vec<TaskWithTagsData>, AppError> {
     let db = lock_db(&state)?;
     TaskRepository::search(&db, &query, project_id.as_deref())
+}
+
+#[tauri::command]
+pub fn list_task_progress(
+    state: State<'_, AppState>,
+    task_id: String,
+) -> Result<Vec<TaskProgressData>, AppError> {
+    let db = lock_db(&state)?;
+    TaskRepository::list_progress(&db, &task_id)
+}
+
+#[tauri::command]
+pub fn add_task_progress(
+    state: State<'_, AppState>,
+    task_id: String,
+    content: String,
+    content_format: Option<String>,
+) -> Result<TaskProgressData, AppError> {
+    let db = lock_db(&state)?;
+    TaskRepository::add_progress(&db, &task_id, &content, content_format.as_deref())
 }

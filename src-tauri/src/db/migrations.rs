@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-const CURRENT_VERSION: i32 = 6;
+const CURRENT_VERSION: i32 = 7;
 
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     let user_version: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -22,6 +22,9 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     }
     if user_version < 6 {
         migrate_v6(conn)?;
+    }
+    if user_version < 7 {
+        migrate_v7(conn)?;
     }
 
     conn.pragma_update(None, "user_version", CURRENT_VERSION)?;
@@ -147,6 +150,24 @@ fn migrate_v6(conn: &Connection) -> Result<(), rusqlite::Error> {
     // Rename 'backlog' status to 'unscheduled'
     conn.execute_batch(
         "UPDATE tasks SET status = 'unscheduled' WHERE status = 'backlog';",
+    )?;
+    Ok(())
+}
+
+fn migrate_v7(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS task_progress (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            content_format TEXT DEFAULT NULL CHECK(content_format IN ('richtext', 'markdown')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_progress_task_id ON task_progress(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_progress_created_at ON task_progress(created_at);
+        ",
     )?;
     Ok(())
 }
