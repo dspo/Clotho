@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Type, Code, X } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RichTextEditor } from '@/components/common/RichTextEditor';
 import { TaskForm } from '@/components/task/TaskForm';
 import type { TaskFormValue } from '@/components/task/TaskForm';
+import { useTagStore } from '@/stores/tag-store';
+import { tagService } from '@/services/tag-service';
 import type { CreateTaskInput, TaskStatus, TaskPriority, DescriptionFormat } from '@/types/task';
 import type { Tag } from '@/types/tag';
 import { VisuallyHidden } from 'radix-ui';
@@ -34,6 +37,9 @@ export function TaskCreateDialog({
   defaultStatus = 'todo',
   defaultPriority = 'low',
 }: TaskCreateDialogProps) {
+  const createTag = useTagStore((s) => s.createTag);
+  const fetchTags = useTagStore((s) => s.fetchTags);
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [descriptionFormat, setDescriptionFormat] = useState<DescriptionFormat | null>(null);
@@ -48,6 +54,11 @@ export function TaskCreateDialog({
     estimatedHours: null,
     actualHours: null,
   });
+
+  useEffect(() => {
+    if (!open || allTags.length > 0) return;
+    void fetchTags();
+  }, [open, allTags.length, fetchTags]);
 
   const resetForm = () => {
     setTitle('');
@@ -106,6 +117,24 @@ export function TaskCreateDialog({
     setShowFormatChooser(false);
   };
 
+  const handleCreateTag = async (name: string, color: string): Promise<Tag> => {
+    try {
+      return await createTag({ name, color });
+    } catch (error) {
+      const message = String(error).toLowerCase();
+      if (message.includes('already exists') || message.includes('conflict')) {
+        const latestTags = await tagService.list();
+        const existing = latestTags.find((tag) => tag.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          await fetchTags();
+          return existing;
+        }
+      }
+      toast.error('Failed to create tag');
+      throw error;
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
@@ -153,6 +182,7 @@ export function TaskCreateDialog({
               value={formValue}
               onChange={(update) => setFormValue((prev) => ({ ...prev, ...update }))}
               allTags={allTags}
+              onCreateTag={handleCreateTag}
             />
           </div>
 

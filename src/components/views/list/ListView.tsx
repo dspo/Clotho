@@ -11,6 +11,29 @@ import { EMPTY_FILTER, type FilterState } from '@/components/filter/FilterToolba
 import { ListChecks, Search } from 'lucide-react';
 import type { TaskWithTags, TaskStatus, TaskPriority, CreateTaskInput } from '@/types/task';
 
+function isCompletedTask(task: TaskWithTags): boolean {
+  return task.status === 'done' || task.status === 'cancelled';
+}
+
+function sortTasksWithCompletedBottom(tasks: TaskWithTags[]): TaskWithTags[] {
+  const topLevel = tasks.filter((t) => !t.parent_task_id);
+  const children = tasks.filter((t) => !!t.parent_task_id);
+
+  const sortedTopLevel = [...topLevel].sort((a, b) => {
+    const aDone = isCompletedTask(a);
+    const bDone = isCompletedTask(b);
+    if (aDone !== bDone) {
+      return aDone ? 1 : -1;
+    }
+    if (a.sort_order !== b.sort_order) {
+      return a.sort_order - b.sort_order;
+    }
+    return a.created_at.localeCompare(b.created_at);
+  });
+
+  return [...sortedTopLevel, ...children];
+}
+
 function applyFilter(tasks: TaskWithTags[], filter: FilterState): TaskWithTags[] {
   let result = tasks;
 
@@ -44,6 +67,7 @@ export function ListView() {
   const allTasks = useTaskStore((s) => s.tasks);
   const fetchTasks = useTaskStore((s) => s.fetchTasks);
   const updateTask = useTaskStore((s) => s.updateTask);
+  const reorderTasks = useTaskStore((s) => s.reorderTasks);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const createTask = useTaskStore((s) => s.createTask);
   const loading = useTaskStore((s) => s.loading);
@@ -83,7 +107,15 @@ export function ListView() {
     [allTasks, selectedProjectIds],
   );
 
-  const filteredTasks = useMemo(() => applyFilter(projectTasks, filter), [projectTasks, filter]);
+  const orderedProjectTasks = useMemo(
+    () => sortTasksWithCompletedBottom(projectTasks),
+    [projectTasks],
+  );
+
+  const filteredTasks = useMemo(
+    () => applyFilter(orderedProjectTasks, filter),
+    [orderedProjectTasks, filter],
+  );
 
   const hasActiveFilters =
     filter.search !== '' ||
@@ -140,6 +172,13 @@ export function ListView() {
       createTask(input);
     },
     [createTask],
+  );
+
+  const handleReorderTasks = useCallback(
+    (taskIds: string[]) => {
+      void reorderTasks(taskIds, 'sort_order');
+    },
+    [reorderTasks],
   );
 
   const handleOpenCreateDialog = useCallback(() => {
@@ -251,6 +290,7 @@ export function ListView() {
         onBatchDelete={handleBatchDelete}
         onOpenDetail={handleOpenDetail}
         onOpenCreateDialog={handleOpenCreateDialog}
+        onReorderTasks={!hasActiveFilters ? handleReorderTasks : undefined}
       />
       <TaskCreateDialog
         open={createDialogOpen}
