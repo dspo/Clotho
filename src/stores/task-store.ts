@@ -12,6 +12,7 @@ interface TaskState {
   setSelectedTask: (id: string | null) => void;
   createTask: (input: CreateTaskInput) => Promise<TaskWithTags>;
   updateTask: (id: string, input: UpdateTaskInput) => Promise<void>;
+  reorderTasks: (taskIds: string[], orderField: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   getTasksByProject: (projectId: string) => TaskWithTags[];
 }
@@ -46,6 +47,15 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
   updateTask: async (id, input) => {
     try {
       await taskService.update(id, input);
+      await get().fetchTasks();
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  reorderTasks: async (taskIds, orderField) => {
+    try {
+      await taskService.reorder(taskIds, orderField);
       await get().fetchTasks();
     } catch (err) {
       throw err;

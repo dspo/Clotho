@@ -4,6 +4,8 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { PriorityBadge } from '@/components/common/PriorityBadge';
+import { TagChip } from '@/components/common/TagChip';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
@@ -15,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TASK_STATUSES, TASK_PRIORITIES, TASK_DIFFICULTIES } from '@/lib/constants';
+import { TASK_STATUSES, TASK_PRIORITIES, TASK_DIFFICULTIES, PROJECT_COLORS } from '@/lib/constants';
 import type { TaskStatus, TaskPriority, TaskDifficulty } from '@/types/task';
 import type { Tag } from '@/types/tag';
 
@@ -40,17 +42,54 @@ interface TaskFormProps {
   value: TaskFormValue;
   onChange: (update: Partial<TaskFormValue>) => void;
   allTags: Tag[];
+  onCreateTag?: (name: string, color: string) => Promise<Tag>;
   showActualHours?: boolean;
 }
 
-export function TaskForm({ value, onChange, allTags, showActualHours = false }: TaskFormProps) {
+export function TaskForm({ value, onChange, allTags, onCreateTag, showActualHours = false }: TaskFormProps) {
   const [startDateOpen, setStartDateOpen] = useState(false);
   const [dueDateOpen, setDueDateOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
+  const [newTagName, setNewTagName] = useState('');
+  const [creatingTag, setCreatingTag] = useState(false);
 
   const filteredTags = tagSearch
     ? allTags.filter((t) => t.name.toLowerCase().includes(tagSearch.toLowerCase()))
     : allTags;
+  const selectedTags = allTags.filter((t) => value.tagIds.includes(t.id));
+
+  const addTagId = (tagId: string) => {
+    if (value.tagIds.includes(tagId)) return;
+    onChange({ tagIds: [...value.tagIds, tagId] });
+  };
+
+  const removeTagId = (tagId: string) => {
+    onChange({ tagIds: value.tagIds.filter((id) => id !== tagId) });
+  };
+
+  const handleCreateTag = async () => {
+    if (!onCreateTag || creatingTag) return;
+    const name = newTagName.trim();
+    if (!name) return;
+
+    const existing = allTags.find((tag) => tag.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      addTagId(existing.id);
+      setNewTagName('');
+      return;
+    }
+
+    setCreatingTag(true);
+    try {
+      const color = PROJECT_COLORS[allTags.length % PROJECT_COLORS.length];
+      const created = await onCreateTag(name, color);
+      addTagId(created.id);
+      setNewTagName('');
+      setTagSearch('');
+    } finally {
+      setCreatingTag(false);
+    }
+  };
 
   return (
     <div className="space-y-3">
@@ -256,49 +295,83 @@ export function TaskForm({ value, onChange, allTags, showActualHours = false }: 
       </div>
 
       {/* Tags */}
-      {allTags.length > 0 && (
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Tags</label>
-          <div className="rounded-md border p-3 space-y-2">
-            <Input
-              value={tagSearch}
-              onChange={(e) => setTagSearch(e.target.value)}
-              placeholder="Search tags..."
-              className="h-7 text-sm"
-            />
-            <div className="max-h-32 overflow-y-auto space-y-0.5">
-              {filteredTags.map((tag) => {
-                const checked = value.tagIds.includes(tag.id);
-                return (
-                  <label
-                    key={tag.id}
-                    className="flex items-center gap-2 rounded-sm px-2 py-1 text-sm hover:bg-accent cursor-pointer transition-colors"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(c) => {
-                        onChange({
-                          tagIds: c
-                            ? [...value.tagIds, tag.id]
-                            : value.tagIds.filter((id) => id !== tag.id),
-                        });
-                      }}
-                    />
-                    <span
-                      className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    <span className="truncate">{tag.name}</span>
-                  </label>
-                );
-              })}
-              {filteredTags.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-2">No tags found</p>
-              )}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Tags</label>
+        <div className="rounded-md border p-3 space-y-2">
+          {selectedTags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {selectedTags.map((tag) => (
+                <TagChip key={tag.id} tag={tag} onRemove={() => removeTagId(tag.id)} />
+              ))}
             </div>
+          )}
+          <div className="flex gap-2">
+            <Input
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              placeholder="Create tag..."
+              className="h-7 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleCreateTag();
+                }
+              }}
+              disabled={!onCreateTag || creatingTag}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 shrink-0"
+              onClick={() => {
+                void handleCreateTag();
+              }}
+              disabled={!onCreateTag || creatingTag || !newTagName.trim()}
+            >
+              Add
+            </Button>
+          </div>
+          <Input
+            value={tagSearch}
+            onChange={(e) => setTagSearch(e.target.value)}
+            placeholder="Search tags..."
+            className="h-7 text-sm"
+          />
+          <div className="max-h-32 overflow-y-auto space-y-0.5">
+            {filteredTags.map((tag) => {
+              const checked = value.tagIds.includes(tag.id);
+              return (
+                <label
+                  key={tag.id}
+                  className="flex items-center gap-2 rounded-sm px-2 py-1 text-sm hover:bg-accent cursor-pointer transition-colors"
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(checkedValue) => {
+                      if (checkedValue) {
+                        addTagId(tag.id);
+                        return;
+                      }
+                      removeTagId(tag.id);
+                    }}
+                  />
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ backgroundColor: tag.color }}
+                  />
+                  <span className="truncate">{tag.name}</span>
+                </label>
+              );
+            })}
+            {filteredTags.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                {allTags.length === 0 ? 'No tags yet. Create your first tag above.' : 'No tags found'}
+              </p>
+            )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

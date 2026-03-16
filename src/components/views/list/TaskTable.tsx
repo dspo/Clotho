@@ -1,6 +1,9 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { type SortingState, type RowSelectionState } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TitleCell } from './cells/TitleCell';
@@ -34,6 +37,7 @@ interface TaskTableProps {
   onBatchDelete: (ids: string[]) => void;
   onOpenDetail: (id: string) => void;
   onOpenCreateDialog?: () => void;
+  onReorderTasks?: (taskIds: string[]) => void;
 }
 
 type EditingCell = {
@@ -58,6 +62,62 @@ const PRIORITY_ORDER: Record<TaskPriority, number> = {
   low: 3,
 };
 
+function isCompletedStatus(status: TaskStatus): boolean {
+  return status === 'done' || status === 'cancelled';
+}
+
+interface SortableTaskRowProps {
+  task: TaskWithTags;
+  disabled: boolean;
+  className: string;
+  style?: React.CSSProperties;
+  onDoubleClick: () => void;
+  children: React.ReactNode;
+}
+
+function SortableTaskRow({
+  task,
+  disabled,
+  className,
+  style,
+  onDoubleClick,
+  children,
+}: SortableTaskRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: task.id,
+    disabled,
+    data: {
+      type: 'Task',
+      task,
+    },
+  });
+
+  const dndStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={cn(className, isDragging && 'opacity-70')}
+      style={{ ...style, ...dndStyle }}
+      onDoubleClick={onDoubleClick}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function TaskTable({
   tasks,
   allTags,
@@ -74,6 +134,7 @@ export function TaskTable({
   onBatchDelete,
   onOpenDetail,
   onOpenCreateDialog,
+  onReorderTasks,
 }: TaskTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -173,7 +234,7 @@ export function TaskTable({
   // Build virtual rows
   type VirtualRow =
     | { type: 'group-header'; key: string; label: string; color?: string; count: number }
-    | { type: 'task'; task: TaskWithTags }
+    | { type: 'task'; task: TaskWithTags; groupKey: string }
     | { type: 'inline-create'; groupDefaults?: { status?: TaskStatus; priority?: TaskPriority } };
 
   const virtualRows = useMemo<VirtualRow[]>(() => {
@@ -190,7 +251,7 @@ export function TaskTable({
         });
         if (!collapsedGroups.has(group.key)) {
           for (const task of group.tasks) {
-            rows.push({ type: 'task', task });
+            rows.push({ type: 'task', task, groupKey: group.key });
           }
           const defaults: any = {};
           if (groupBy === 'status') defaults.status = group.key as TaskStatus;
@@ -200,7 +261,7 @@ export function TaskTable({
       }
     } else {
       for (const task of flatTasks) {
-        rows.push({ type: 'task', task });
+        rows.push({ type: 'task', task, groupKey: '__ungrouped' });
       }
       rows.push({ type: 'inline-create' });
     }
@@ -219,6 +280,92 @@ export function TaskTable({
     },
     overscan: 5,
   });
+
+  const topLevelTasks = useMemo(
+    () => tasks.filter((task) => !task.parent_task_id),
+    [tasks],
+  );
+
+  const topLevelTaskIds = useMemo(
+    () => topLevelTasks.map((task) => task.id),
+    [topLevelTasks],
+  );
+
+  const topLevelTaskMap = useMemo(
+    () => new Map(topLevelTasks.map((task) => [task.id, task] as const)),
+    [topLevelTasks],
+  );
+
+  const taskGroupKeyMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!groups) {
+      for (const task of topLevelTasks) {
+        map.set(task.id, '__ungrouped');
+      }
+      return map;
+    }
+
+    for (const group of groups) {
+      for (const task of group.tasks) {
+        if (!task.parent_task_id) {
+          map.set(task.id, group.key);
+        }
+      }
+    }
+    return map;
+  }, [groups, topLevelTasks]);
+
+  const reorderEnabled = sorting.length === 0 && !editingCell && !!onReorderTasks;
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 4 },
+    }),
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    if (!reorderEnabled || !onReorderTasks) return;
+
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (activeId === overId) return;
+
+    const activeTask = topLevelTaskMap.get(activeId);
+    const overTask = topLevelTaskMap.get(overId);
+    if (!activeTask || !overTask) return;
+
+    const activeGroupKey = taskGroupKeyMap.get(activeId);
+    const overGroupKey = taskGroupKeyMap.get(overId);
+    if (!activeGroupKey || !overGroupKey || activeGroupKey !== overGroupKey) return;
+
+    const groupTaskIds = topLevelTasks
+      .filter((task) => taskGroupKeyMap.get(task.id) === activeGroupKey)
+      .map((task) => task.id);
+
+    const oldIndex = groupTaskIds.indexOf(activeId);
+    const newIndex = groupTaskIds.indexOf(overId);
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
+
+    const movedGroupTaskIds = arrayMove(groupTaskIds, oldIndex, newIndex);
+    const activeIds = movedGroupTaskIds.filter((id) => !isCompletedStatus(topLevelTaskMap.get(id)!.status));
+    const completedIds = movedGroupTaskIds.filter((id) => isCompletedStatus(topLevelTaskMap.get(id)!.status));
+    const normalizedGroupTaskIds = [...activeIds, ...completedIds];
+
+    const groupTaskSet = new Set(groupTaskIds);
+    let pointer = 0;
+    const reorderedTopLevelIds = topLevelTaskIds.map((id) => {
+      if (!groupTaskSet.has(id)) return id;
+      const next = normalizedGroupTaskIds[pointer];
+      pointer += 1;
+      return next;
+    });
+
+    const reorderedActive = reorderedTopLevelIds.filter((id) => !isCompletedStatus(topLevelTaskMap.get(id)!.status));
+    const reorderedCompleted = reorderedTopLevelIds.filter((id) => isCompletedStatus(topLevelTaskMap.get(id)!.status));
+    onReorderTasks([...reorderedActive, ...reorderedCompleted]);
+  }, [onReorderTasks, reorderEnabled, taskGroupKeyMap, topLevelTaskIds, topLevelTaskMap, topLevelTasks]);
 
   const toggleExpand = useCallback((taskId: string) => {
     setExpandedTasks((prev) => {
@@ -464,99 +611,86 @@ export function TaskTable({
       </div>
 
       {/* Virtual scroll container */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto">
-        <div
-          style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
-        >
-          {virtualizer.getVirtualItems().map((virtualItem) => {
-            const row = sortedVirtualRows[virtualItem.index];
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={topLevelTaskIds} strategy={verticalListSortingStrategy}>
+          <div ref={scrollContainerRef} className="flex-1 overflow-auto">
+            <div
+              style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
+            >
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const row = sortedVirtualRows[virtualItem.index];
 
-            if (row.type === 'group-header') {
-              return (
-                <div
-                  key={`group-${row.key}`}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: virtualItem.size,
-                    transform: `translateY(${virtualItem.start}px)`,
-                  }}
-                >
-                  <GroupHeader
-                    label={row.label}
-                    color={row.color}
-                    count={row.count}
-                    expanded={!collapsedGroups.has(row.key)}
-                    onToggle={() => toggleGroupCollapse(row.key)}
-                  />
-                </div>
-              );
-            }
-
-            if (row.type === 'inline-create') {
-              return (
-                <div
-                  key={`create-${virtualItem.index}`}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: virtualItem.size,
-                    transform: `translateY(${virtualItem.start}px)`,
-                  }}
-                  className="flex items-center border-b"
-                >
-                  <div className="w-[32px] shrink-0" />
-                  <div className="flex-1">
-                    <button
-                      type="button"
-                      onClick={onOpenCreateDialog}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
+                if (row.type === 'group-header') {
+                  return (
+                    <div
+                      key={`group-${row.key}`}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: virtualItem.size,
+                        transform: `translateY(${virtualItem.start}px)`,
+                      }}
                     >
-                      <Plus className="h-4 w-4" />
-                      New task
-                    </button>
-                  </div>
-                </div>
-              );
-            }
+                      <GroupHeader
+                        label={row.label}
+                        color={row.color}
+                        count={row.count}
+                        expanded={!collapsedGroups.has(row.key)}
+                        onToggle={() => toggleGroupCollapse(row.key)}
+                      />
+                    </div>
+                  );
+                }
 
-            const task = row.task;
-            const meta = taskMeta.get(task.id);
-            const isSelected = rowSelection[task.id];
+                if (row.type === 'inline-create') {
+                  return (
+                    <div
+                      key={`create-${virtualItem.index}`}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: virtualItem.size,
+                        transform: `translateY(${virtualItem.start}px)`,
+                      }}
+                      className="flex items-center border-b"
+                    >
+                      <div className="w-[32px] shrink-0" />
+                      <div className="flex-1">
+                        <button
+                          type="button"
+                          onClick={onOpenCreateDialog}
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
+                        >
+                          <Plus className="h-4 w-4" />
+                          New task
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
 
-            return (
-              <div
-                key={task.id}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: virtualItem.size,
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                <TaskContextMenu
-                  onOpen={() => onOpenDetail(task.id)}
-                  onStatusChange={(status) => onUpdateTask(task.id, 'status', status)}
-                  onPriorityChange={(priority) => onUpdateTask(task.id, 'priority', priority)}
-                  onDelete={() => onDeleteTask(task.id)}
-                  taskIdForCopy={task.id}
-                >
-                  <div
-                    className={cn(
-                      'flex items-center h-full border-b border-l-2 text-sm hover:bg-muted/50 transition-colors cursor-default',
-                      isSelected ? 'bg-accent/10 border-l-accent' : 'border-l-transparent',
-                    )}
-                    style={!isSelected ? { borderLeftColor: projectColorMap?.get(task.project_id) ?? projectColor ?? 'transparent' } : undefined}
-                    onDoubleClick={() => {
-                      if (!editingCell) onOpenDetail(task.id);
-                    }}
-                  >
+                const task = row.task;
+                const meta = taskMeta.get(task.id);
+                const isSelected = rowSelection[task.id];
+                const isTopLevel = !task.parent_task_id;
+                const rowStyle = !isSelected ? {
+                  borderLeftColor: projectColorMap?.get(task.project_id) ?? projectColor ?? 'transparent',
+                } : undefined;
+                const rowClassName = cn(
+                  'flex items-center h-full border-b border-l-2 text-sm hover:bg-muted/50 transition-colors',
+                  isSelected ? 'bg-accent/10 border-l-accent' : 'border-l-transparent',
+                  isTopLevel && reorderEnabled ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
+                );
+                const rowContent = (
+                  <>
                     <div className="w-[32px] flex items-center justify-center shrink-0">
                       <Checkbox
                         checked={!!isSelected}
@@ -650,13 +784,59 @@ export function TaskTable({
                         {projectNameMap?.get(task.project_id) ?? projectName ?? ''}
                       </span>
                     </div>
+                  </>
+                );
+
+                return (
+                  <div
+                    key={task.id}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: virtualItem.size,
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
+                    <TaskContextMenu
+                      onOpen={() => onOpenDetail(task.id)}
+                      onStatusChange={(status) => onUpdateTask(task.id, 'status', status)}
+                      onPriorityChange={(priority) => onUpdateTask(task.id, 'priority', priority)}
+                      onDelete={() => onDeleteTask(task.id)}
+                      taskIdForCopy={task.id}
+                    >
+                      {isTopLevel ? (
+                        <SortableTaskRow
+                          task={task}
+                          disabled={!reorderEnabled}
+                          className={rowClassName}
+                          style={rowStyle}
+                          onDoubleClick={() => {
+                            if (!editingCell) onOpenDetail(task.id);
+                          }}
+                        >
+                          {rowContent}
+                        </SortableTaskRow>
+                      ) : (
+                        <div
+                          className={rowClassName}
+                          style={rowStyle}
+                          onDoubleClick={() => {
+                            if (!editingCell) onOpenDetail(task.id);
+                          }}
+                        >
+                          {rowContent}
+                        </div>
+                      )}
+                    </TaskContextMenu>
                   </div>
-                </TaskContextMenu>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                );
+              })}
+            </div>
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }
