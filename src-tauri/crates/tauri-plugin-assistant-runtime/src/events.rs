@@ -3,11 +3,8 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter, Runtime};
 use uuid::Uuid;
 
+use crate::runtime_plugin_metadata;
 use crate::models::AssistantStatusEventEnvelope;
-
-pub const STATUS_EVENT: &str = "assistant-runtime://status";
-pub const THREADS_CHANGED_EVENT: &str = "assistant-runtime://threads-changed";
-pub const DEBUG_EVENT: &str = "assistant-runtime://debug";
 
 fn envelope(kind: &str, payload: serde_json::Value) -> AssistantStatusEventEnvelope {
     AssistantStatusEventEnvelope {
@@ -20,7 +17,11 @@ fn envelope(kind: &str, payload: serde_json::Value) -> AssistantStatusEventEnvel
 }
 
 pub fn emit_status<R: Runtime>(app: &AppHandle<R>, state: &str) {
-    let _ = app.emit(STATUS_EVENT, envelope("connection_status", json!({ "state": state })));
+    let metadata = runtime_plugin_metadata(app);
+    let _ = app.emit(
+        metadata.status_event,
+        envelope("connection_status", json!({ "state": state })),
+    );
 }
 
 pub fn emit_threads_changed<R: Runtime>(
@@ -28,8 +29,9 @@ pub fn emit_threads_changed<R: Runtime>(
     reason: &str,
     thread_id: Option<&str>,
 ) {
+    let metadata = runtime_plugin_metadata(app);
     let _ = app.emit(
-        THREADS_CHANGED_EVENT,
+        metadata.threads_changed_event,
         envelope(
             "threads_changed",
             json!({
@@ -41,8 +43,9 @@ pub fn emit_threads_changed<R: Runtime>(
 }
 
 pub fn emit_debug<R: Runtime>(app: &AppHandle<R>, message: impl Into<String>) {
+    let metadata = runtime_plugin_metadata(app);
     let _ = app.emit(
-        DEBUG_EVENT,
+        metadata.debug_event,
         envelope(
             "debug_notice",
             json!({

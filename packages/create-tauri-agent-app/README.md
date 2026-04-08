@@ -1,8 +1,22 @@
 # create-tauri-agent-app
 
-Minimal scaffold for the Tauri Agent Runtime Framework.
+`create-tauri-agent-app` 是 Tauri Agent Runtime Framework 的最小脚手架。
 
-Usage:
+## 安装
+
+当前仓库内使用：
+
+```bash
+node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs prompt-only ./my-agent-app
+```
+
+未来发布到 npm 后，可直接使用：
+
+```bash
+pnpm dlx create-tauri-agent-app prompt-only ./my-agent-app
+```
+
+## 用法
 
 ```bash
 create-tauri-agent-app prompt-only ./my-agent-app
@@ -10,14 +24,8 @@ create-tauri-agent-app declarative ./my-agent-app
 create-tauri-agent-app operator ./my-agent-app
 ```
 
-Templates:
+## 模板
 
-- `prompt-only`: minimal prompt-centric agent definition
-- `declarative`: resource/action/domain declarations included
-- `operator`: a starting point for higher-permission tools and operator flows
-
-Local development in this repo:
-
-```bash
-node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs prompt-only ./tmp-agent
-```
+- `prompt-only`：最小 prompt agent
+- `declarative`：内置 resource / action / domain 声明
+- `operator`：预留高权限 tools 与 operator workflow

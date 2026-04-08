@@ -10315,6 +10315,7 @@ dependencies = [
  "codex-core",
  "codex-feedback",
  "codex-protocol",
+ "dirs",
  "rusqlite",
  "serde",
  "serde_json",

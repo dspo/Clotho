@@ -1,14 +1,21 @@
 # tauri-plugin-agent-runtime
 
-Generic Tauri plugin entrypoint for the Tauri Agent Runtime Framework.
+`tauri-plugin-agent-runtime` 是面向宿主应用的统一 Tauri plugin 入口，底层能力基于 Codex，并对外暴露 `agent-runtime` 插件命名空间。
 
-## What this crate exposes
+## 安装
 
-- `init()` for Tauri plugin registration
-- framework-facing public types re-exported from `agent-core`
-- compatibility exports from `tauri-plugin-assistant-runtime` so existing runtime flows keep working
+```toml
+[dependencies]
+tauri-plugin-agent-runtime = { git = "https://github.com/dspo/Clotho.git" }
+```
 
-## Minimal registration
+## 它暴露什么
+
+- `init()`：注册 `agent-runtime` plugin
+- 从 `agent-core` 重新导出的公共抽象
+- 与 thread / turn / stream / catalog 相关的共享 runtime 类型
+
+## 最小注册
 
 ```rust
 use tauri_plugin_agent_runtime::init as agent_runtime_plugin;
@@ -21,10 +28,8 @@ fn main() {
 }
 ```
 
-## Current migration state
+## 迁移说明
 
-- The generic plugin name is now the preferred Rust entrypoint.
-- Internally, `init()` still delegates to `tauri-plugin-assistant-runtime`.
-- Runtime abstractions such as `Builder`, `AgentDefinition`, `FunctionToolDefinition`, `ToolProvider`, `ActionPolicy`, and `OutputContract` come from `agent-core`.
-
-That keeps the API surface moving toward the framework name without breaking the already working Clotho runtime chain.
+- 新宿主统一使用 `tauri-plugin-agent-runtime`
+- 旧的 `tauri-plugin-assistant-runtime` 仅保留为兼容别名
+- capability 配置中应统一引用 `agent-runtime:*`

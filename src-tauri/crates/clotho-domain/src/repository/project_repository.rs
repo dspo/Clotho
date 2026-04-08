@@ -119,7 +119,7 @@ impl ProjectRepository {
                 [],
                 |row| row.get(0),
             )
-            .unwrap_or(-1);
+            .map_err(DomainError::Database)?;
 
         conn.execute(
             "INSERT INTO projects (id, name, description, color, sort_order, created_at, updated_at)
@@ -158,7 +158,7 @@ impl ProjectRepository {
                 [id],
                 |row| row.get(0),
             )
-            .unwrap_or(false);
+            .map_err(DomainError::Database)?;
 
         if !exists {
             return Err(DomainError::NotFound(format!("project {id}")));

@@ -2,8 +2,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 
 配套开发者文档：
 
-- [Quickstart](./quickstart.md)
-- [Developer Guide](./developer-guide.md)
+- [快速接入与开发指南](./quickstart.md)
 
 # 目标
 
@@ -30,7 +29,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 - 已有 embedded Codex runtime、thread/turn/channel、native tools、proposal/apply、automation 主链。
 - tauri-plugin-assistant-runtime 直接依赖 clotho-domain（需抽离）。
 - native tools、proposal schema、skills、catalog 等带有 Clotho 领域耦合。
-- 前端 typed client/types 仍在 app 内部（需抽成 npm SDK）。
+- 前端类型安全客户端与 types 仍在 app 内部（需抽成 npm SDK）。
 - 目前只有 default 权限集，需扩展为至少 read-only/operator/automation/debug。
 - 仓库现在不是 JS monorepo/workspace，需要改为 workspace 并新增 packages。
 
@@ -58,8 +57,8 @@ Issue: https://github.com/dspo/Clotho/issues/15
   - 实现 permission sets（至少 read-only/operator/automation/debug）。
 
 - JS/TS:
-  - 把前端 typed client/types 提炼成 pnpm workspace packages：
-    - packages/tauri-agent（headless typed client + authoring API：defineAgent、defineDomain 等）
+  - 把前端类型安全客户端与 types 提炼成 pnpm workspace packages：
+    - packages/tauri-agent（headless 类型安全客户端 + authoring API：defineAgent、defineDomain 等）
     - packages/tauri-agent-react（最小 React 组件 / hooks：transcript、approval、proposal、audit）
     - packages/create-tauri-agent-app（最小脚手架，能生成至少 prompt-only / declarative / operator 模板之一）
   - examples/ 或 templates/ 提供最少一个非 Clotho 的 demo，证明框架通用。
@@ -81,7 +80,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 4. 在迁移过程中，把 Clotho 专用逻辑抽到宿主适配层（clotho-adapter crate 或 app-side module），确保有 thin shim 维持兼容。
 5. 修改 src-tauri/src/lib.rs 和 app 的 plugin 注册，使其使用新的通用 plugin；确保 Clotho 在每一步的中间状态都能恢复并通过 smoke test。
 6. 在 JS 侧改造为 pnpm workspace（packages/...），抽出 tauri-agent 与 tauri-agent-react、create-tauri-agent-app。
-7. 为 TS SDK 提供 typed client（示例 API: defineAgent、defineDomain、TauriAgentClient.run/ simulate/ apply）。
+7. 为 TS SDK 提供类型安全客户端（示例 API: defineAgent、defineDomain、TauriAgentClient.run/ simulate/ apply）。
 8. 提供最小 React 组件和示例页面，能在 Clotho app 或 demo 中使用。
 9. 新增脚手架最小实现，能生成模板。
 10. 撰写文档、示例、README 与迁移指南。

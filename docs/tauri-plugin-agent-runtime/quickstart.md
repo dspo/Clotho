@@ -1,35 +1,68 @@
-# Tauri Agent Runtime Quickstart
+# 基于 Codex 的 Tauri Agent Runtime 快速接入与开发指南
 
-这份文档面向希望把 Codex 能力快速接入 Tauri v2 应用的开发者。当前仓库里的 framework 还处在“generic facade + legacy runtime shim”阶段，但已经具备一条可运行的最小接入路径：
+这份文档面向希望在 Tauri v2 应用中集成 **基于 Codex 的 AI Agent 能力** 的开发者。对外推荐的统一入口是：
 
-1. Rust 侧注册 `tauri-plugin-agent-runtime`
-2. TypeScript 侧用 `@dspo/tauri-agent` 声明 agent / domain
-3. 可选地用 `@dspo/tauri-agent-react` 渲染 transcript / proposal / audit
-4. 需要新项目时，用 `create-tauri-agent-app` 生成模板
+1. Rust 侧使用 `tauri-plugin-agent-runtime`
+2. TypeScript 侧使用 `@dspo/tauri-agent`
+3. React 宿主按需使用 `@dspo/tauri-agent-react`
+4. 新项目可用 `create-tauri-agent-app` 起模板
 
-## 组件一览
+旧的 `tauri-plugin-assistant-runtime` 只保留为兼容别名，用来承接历史代码；**新的宿主应用不应再以它作为主入口**。
 
-| Surface | Path / package | Responsibility |
-| --- | --- | --- |
-| Rust core | `src-tauri/crates/agent-core` | 通用 agent/tool/provider/policy/output 抽象 |
-| Tauri plugin | `src-tauri/crates/tauri-plugin-agent-runtime` | Tauri plugin 入口；当前转接到兼容层实现 |
-| Legacy compatibility layer | `src-tauri/crates/tauri-plugin-assistant-runtime` | 现有 thread/turn/streaming/proposal/runtime 主链 |
-| TS SDK | `packages/tauri-agent` | typed client、runtime types、`defineAgent` / `defineDomain` |
-| React bindings | `packages/tauri-agent-react` | `Transcript`、`ProposalSummary`、`AuditTrail`、`useAgentStatus` |
-| Scaffold | `packages/create-tauri-agent-app` | `prompt-only` / `declarative` / `operator` 模板 |
+## 目录结构与职责
 
-## 1. Rust 侧注册 plugin
+| 路径 / 包 | 作用 |
+| --- | --- |
+| `src-tauri/crates/agent-core` | 通用抽象：`Builder`、`AgentDefinition`、`FunctionToolDefinition`、`ToolProvider`、`ActionPolicy`、`OutputContract` |
+| `src-tauri/crates/tauri-plugin-agent-runtime` | 对外统一的 Tauri plugin 入口，插件命名空间为 `agent-runtime` |
+| `src-tauri/crates/tauri-plugin-assistant-runtime` | 旧兼容层，承载当前 thread/turn/stream/runtime 主链实现 |
+| `src-tauri/crates/clotho-adapter` | 让 runtime 先依赖通用 adapter，再由宿主接 Clotho domain |
+| `packages/tauri-agent` | 类型安全客户端、共享 DTO、`defineAgent` / `defineDomain` |
+| `packages/tauri-agent-react` | transcript / proposal / audit 的最小 React 组件与 hooks |
+| `packages/create-tauri-agent-app` | `prompt-only` / `declarative` / `operator` 模板 |
 
-如果你在这个 monorepo 内开发，直接使用 path / workspace 依赖；未来对外发布后再切换成 semver 依赖即可。
+## 1. 安装与引用
+
+### Rust 侧
+
+开发者文档默认按 Git 依赖示例说明；实际项目中建议固定 `rev` 或 tag。
 
 ```toml
-# src-tauri/Cargo.toml
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-agent-runtime = { path = "crates/tauri-plugin-agent-runtime" }
+tauri-plugin-agent-runtime = { git = "https://github.com/dspo/Clotho.git" }
 ```
 
-然后在 Tauri builder 中注册 plugin：
+如果你就在本仓库内开发，也可以直接使用 workspace/path 依赖。
+
+### TypeScript 侧
+
+当前仓库内的包通过 pnpm workspace 提供；未来对外发布后，可替换成常规 npm 依赖。
+
+```bash
+pnpm add @dspo/tauri-agent
+pnpm add @dspo/tauri-agent-react
+```
+
+### 脚手架
+
+当前仓库内可直接运行：
+
+```bash
+node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs prompt-only ./my-agent-app
+```
+
+未来对外发布后，可使用：
+
+```bash
+pnpm dlx create-tauri-agent-app prompt-only ./my-agent-app
+```
+
+## 2. 在 Tauri 中注册 plugin
+
+`tauri-plugin-agent-runtime` 的统一 namespace 是 `agent-runtime`，因此 capability 里也应使用 `agent-runtime:*` 权限标识。
+
+### Rust 注册
 
 ```rust
 use tauri_plugin_agent_runtime::init as agent_runtime_plugin;
@@ -42,9 +75,124 @@ fn main() {
 }
 ```
 
-## 2. TypeScript 侧声明 agent / domain
+### Capability 示例
 
-`@dspo/tauri-agent` 暴露的是声明式 authoring API 和 typed runtime client。
+```json
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "agent-runtime:operator"
+  ]
+}
+```
+
+当前内置权限集：
+
+- `agent-runtime:read-only`
+- `agent-runtime:operator`
+- `agent-runtime:automation`
+- `agent-runtime:debug`
+- `agent-runtime:default`
+
+## 3. 定义和注册 function tools
+
+在当前实现里，`function_tools` 的接入分成两层：
+
+1. `FunctionToolDefinition`：描述 tool 的 contract、权限、schema、可见性
+2. `ToolProvider`：真正执行 tool 调用
+
+也就是说，`register_tool(...)` 负责把 tool 暴露到 runtime catalog，`register_provider(...)` 负责执行入口。
+
+```rust
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use serde_json::{json, Value};
+use tauri_plugin_agent_runtime::{
+    AgentError, Builder, ExecutionMode, FunctionToolDefinition, PermissionSet,
+    ProviderRegistration, RuntimeConfig, RuntimeContext, ToolContext, ToolProvider, Visibility,
+};
+
+struct LocalWorkspaceProvider;
+
+#[async_trait]
+impl ToolProvider for LocalWorkspaceProvider {
+    async fn list_tools(
+        &self,
+        _ctx: &RuntimeContext,
+    ) -> Vec<FunctionToolDefinition> {
+        vec![FunctionToolDefinition {
+            id: "workspace.list_files".into(),
+            description: "列出工作区文件".into(),
+            namespace: Some("workspace".into()),
+            input_schema: Some(json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string" }
+                }
+            })),
+            output_schema: Some(json!({
+                "type": "array",
+                "items": { "type": "string" }
+            })),
+            execution_mode: ExecutionMode::Immediate,
+            authz: PermissionSet::ReadOnly,
+            visibility: Visibility::Public,
+        }]
+    }
+
+    async fn invoke(
+        &self,
+        _ctx: &ToolContext,
+        tool_id: &str,
+        _input: Value,
+    ) -> Result<Value, AgentError> {
+        match tool_id {
+            "workspace.list_files" => Ok(json!(["src", "src-tauri", "package.json"])),
+            other => Err(AgentError::Execution(format!("unknown tool: {other}"))),
+        }
+    }
+}
+
+let mut builder = Builder::new();
+builder
+    .register_tool(FunctionToolDefinition {
+        id: "workspace.list_files".into(),
+        description: "列出工作区文件".into(),
+        namespace: Some("workspace".into()),
+        input_schema: None,
+        output_schema: None,
+        execution_mode: ExecutionMode::Immediate,
+        authz: PermissionSet::ReadOnly,
+        visibility: Visibility::Public,
+    })
+    .register_provider(
+        ProviderRegistration {
+            id: "local-workspace".into(),
+            kind: "host".into(),
+        },
+        Arc::new(LocalWorkspaceProvider),
+    )
+    .set_config(RuntimeConfig {
+        default_permission: PermissionSet::ReadOnly,
+        provider_adapters: vec!["codex".into()],
+        audit_enabled: true,
+    });
+
+let runtime = builder.build()?;
+assert_eq!(runtime.provider_count(), 1);
+```
+
+### 关于 `FunctionToolHandler`
+
+`FunctionToolHandler` 是更细粒度的 handler trait，适合宿主在更高层再包一层 DSL 或宏；当前框架里，最直接、最稳定的执行路径仍然是 `ToolProvider`。
+
+## 4. 定义 agents、resources、actions
+
+TypeScript 侧推荐通过声明式 API 编排 agent / domain。
 
 ```ts
 import {
@@ -56,40 +204,68 @@ import {
 export const planningDomain = defineDomain({
   id: 'planning',
   resources: [{ resourceId: 'task-db', required: true }],
-  actions: [{ id: 'draft-plan', description: 'Generate a safe work plan' }],
+  actions: [{ id: 'draft-plan', description: '生成今日计划提案' }],
+  tools: [{ toolId: 'workspace.list_files', permission: builtinPermissionSets[0] }],
 });
 
 export const plannerAgent = defineAgent({
   id: 'planner',
   name: 'Planner',
-  description: 'Plan work with proposal-first safeguards.',
-  instructions: 'Help the user plan work safely and explain trade-offs.',
-  toolBindings: [{ toolId: 'list_tasks', permission: builtinPermissionSets[0] }],
+  description: '生成任务规划与提案。',
+  instructions: '优先给出安全、可审计、可应用的计划。',
+  toolBindings: [{ toolId: 'workspace.list_files', permission: builtinPermissionSets[0] }],
+  skillBindings: [{ skillId: 'planning/default' }],
+  resourceBindings: [{ resourceId: 'task-db', required: true }],
   actionPolicy: 'proposal-only',
   outputContract: 'proposal',
 });
 ```
 
-内置权限集当前固定为：
+## 5. 集成 skills 与 integrations
 
-- `read-only`
-- `operator`
-- `automation`
-- `debug`
+skills 是 authoring-time assets，不是比 tool 更高一级的 runtime primitive。推荐做法是：
 
-## 3. 使用 typed client 建 thread / turn / stream
+1. 在宿主仓库保留 skills 根目录，例如 `.agents/skills`
+2. 通过 `SkillCatalogRegistration` 注册 skills catalog
+3. 在 agent 定义里通过 `skillBindings` 引用 skill id
+
+```rust
+use serde_json::json;
+use tauri_plugin_agent_runtime::{IntegrationRegistration, SkillCatalogRegistration};
+
+builder
+    .register_skill_catalog(SkillCatalogRegistration {
+        id: "default-skills".into(),
+        description: Some("宿主提供的行为资产目录".into()),
+        root_path: ".agents/skills".into(),
+    })
+    .register_integration(IntegrationRegistration {
+        id: "github-mcp".into(),
+        kind: "mcp".into(),
+        config: Some(json!({
+            "transport": "streamable-http",
+            "baseUrl": "http://127.0.0.1:7400/mcp"
+        })),
+    });
+```
+
+这里的 `IntegrationRegistration` 表达的是接入源；例如 MCP 是 integration / tool provider transport，而不是业务动作模型本身。
+
+## 6. 创建 thread / turn / streaming
+
+`@dspo/tauri-agent` 默认连接 `agent-runtime` 插件命名空间。
 
 ```ts
 import { defaultTauriAgentClient } from '@dspo/tauri-agent';
 
 const thread = await defaultTauriAgentClient.createThread({
-  title: 'Weekly planning',
+  title: '每周规划',
 });
 
 const ack = await defaultTauriAgentClient.startTurn(
   {
     threadId: thread.threadId,
-    text: 'Review my workload and prepare a proposal for today.',
+    text: '请先查看我的任务，再给出今天的提案。',
     mode: 'plan',
   },
   (item) => {
@@ -101,36 +277,46 @@ const snapshot = await defaultTauriAgentClient.getThreadSnapshot(thread.threadId
 console.log(ack.turnId, snapshot.blocks.length);
 ```
 
-如果宿主应用实现了 proposal / automation 边界，还可以使用：
+如果宿主额外实现了治理边界，还可以继续接：
 
 - `simulateProposal(...)`
 - `applyProposal(...)`
 - `getDailyAutomationStatus()`
 - `runDailyAutomationNow()`
 
-## 4. 可选：接入 React 组件 / hooks
+这些 API 的最终写入边界仍应保留在宿主应用，而不是让通用 runtime 直接越权写库。
+
+## 7. React 宿主接入
 
 ```tsx
 import { defaultTauriAgentClient } from '@dspo/tauri-agent';
-import { Transcript, useAgentStatus } from '@dspo/tauri-agent-react';
+import { Transcript, ProposalSummary, AuditTrail, useAgentStatus } from '@dspo/tauri-agent-react';
 
-export function AgentPanel({ blocks }: { blocks: any[] }) {
+export function AgentPanel({
+  blocks,
+  proposal,
+  audits,
+}: {
+  blocks: any[];
+  proposal?: any;
+  audits: any[];
+}) {
   const events = useAgentStatus((handler) => defaultTauriAgentClient.onStatus(handler));
 
   return (
     <section>
-      <p>Status events: {events.length}</p>
+      <p>状态事件数：{events.length}</p>
       <Transcript blocks={blocks} />
+      {proposal ? <ProposalSummary proposal={proposal} /> : null}
+      <AuditTrail entries={audits} />
     </section>
   );
 }
 ```
 
-当前 React 包提供的能力是最小可用版本，重点是把 transcript / proposal / audit 这几个通用 UI 面先独立出来。
+当前 React 包故意保持最小可用：先把 transcript / proposal / audit / status hook 抽成通用能力，把产品私有壳层留给宿主自己实现。
 
-## 5. 用脚手架快速起步
-
-本仓库中的本地用法：
+## 8. 脚手架模板
 
 ```bash
 node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs prompt-only ./my-agent-app
@@ -140,16 +326,32 @@ node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs operator ./m
 
 模板差异：
 
-- `prompt-only`: 只提供 prompt 和最小 agent 定义
-- `declarative`: 增加 resource / action / domain 声明
-- `operator`: 预留更高权限、自定义 tool/operator 的位置
+- `prompt-only`：只有最小 prompt agent 定义
+- `declarative`：预置 domain/resources/actions
+- `operator`：预留高权限 tool / operator workflow 的位置
 
-## 6. 当前兼容性说明
+## 9. Codex 依赖与迁移说明
 
-为了不打断现有 Clotho 主链，generic plugin 目前仍复用 `tauri-plugin-assistant-runtime` 的运行时实现。因此：
+### Codex 依赖策略
 
-1. Rust 侧推荐使用 `tauri-plugin-agent-runtime::init()`
-2. TypeScript client 当前默认仍连到 `assistant-runtime` plugin namespace
-3. proposal / simulate / apply 的最终写入边界仍由宿主应用负责
+当前 framework 通过 Cargo `git` 依赖引用 Codex crates，而不是 vendor 源码：
 
-换句话说，PR1 交付的是“通用框架表面 + 可接入文档 + 可运行包结构”，PR2 再把 Clotho 作为第一个完整宿主应用接上去。
+- 上游：`https://github.com/openai/codex.git`
+- 当前固定 rev：`bb95ec3ec602dfc7762fd92e2746606df9dfea21`
+
+固定 rev 的目的：
+
+1. 保证构建可复现
+2. 保持 PR 与 CI 绑定到明确的 Codex 快照
+3. 避免上游漂移让 framework surface 悄悄变化
+
+### 旧入口如何处理
+
+- **新宿主入口**：`tauri-plugin-agent-runtime`
+- **旧入口**：`tauri-plugin-assistant-runtime`
+
+旧 crate 只作为兼容别名保留，用来承接历史代码与迁移期桥接。新集成一律应：
+
+1. 使用 `agent-runtime` 插件命名空间
+2. 使用 `agent-runtime:*` capability 权限
+3. 在 TS 侧使用 `@dspo/tauri-agent` 的默认 client 配置

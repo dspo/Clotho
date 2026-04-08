@@ -109,7 +109,7 @@ impl TagRepository {
                 [task_id],
                 |row| row.get(0),
             )
-            .unwrap_or(false);
+            .map_err(DomainError::Database)?;
         if !task_exists {
             return Err(DomainError::NotFound(format!("task {task_id}")));
         }
@@ -118,7 +118,7 @@ impl TagRepository {
             .query_row("SELECT COUNT(*) > 0 FROM tags WHERE id = ?1", [tag_id], |row| {
                 row.get(0)
             })
-            .unwrap_or(false);
+            .map_err(DomainError::Database)?;
         if !tag_exists {
             return Err(DomainError::NotFound(format!("tag {tag_id}")));
         }

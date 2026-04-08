@@ -1,8 +1,8 @@
-## Default Permission
+## 默认权限
 
-Default permissions for the reusable agent runtime plugin.
+可复用 agent runtime plugin 的默认权限。
 
-#### This default permission set includes the following:
+#### 默认权限集包含：
 
 - `allow-list-threads`
 - `allow-get-thread-snapshot`
@@ -15,7 +15,7 @@ Default permissions for the reusable agent runtime plugin.
 - `allow-resolve-config-profile`
 - `allow-get-runtime-catalog`
 
-## Permission Table
+## 权限表
 
 <table>
 <tr>
@@ -32,7 +32,7 @@ Default permissions for the reusable agent runtime plugin.
 </td>
 <td>
 
-Enables the cancel_turn command without any pre-configured scope.
+允许在无预设作用域的情况下调用 cancel_turn 命令。
 
 </td>
 </tr>
@@ -45,7 +45,7 @@ Enables the cancel_turn command without any pre-configured scope.
 </td>
 <td>
 
-Denies the cancel_turn command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 cancel_turn 命令。
 
 </td>
 </tr>
@@ -58,7 +58,7 @@ Denies the cancel_turn command without any pre-configured scope.
 </td>
 <td>
 
-Enables the create_thread command without any pre-configured scope.
+允许在无预设作用域的情况下调用 create_thread 命令。
 
 </td>
 </tr>
@@ -71,7 +71,7 @@ Enables the create_thread command without any pre-configured scope.
 </td>
 <td>
 
-Denies the create_thread command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 create_thread 命令。
 
 </td>
 </tr>
@@ -84,7 +84,7 @@ Denies the create_thread command without any pre-configured scope.
 </td>
 <td>
 
-Enables the get_runtime_catalog command without any pre-configured scope.
+允许在无预设作用域的情况下调用 get_runtime_catalog 命令。
 
 </td>
 </tr>
@@ -97,7 +97,7 @@ Enables the get_runtime_catalog command without any pre-configured scope.
 </td>
 <td>
 
-Denies the get_runtime_catalog command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 get_runtime_catalog 命令。
 
 </td>
 </tr>
@@ -110,7 +110,7 @@ Denies the get_runtime_catalog command without any pre-configured scope.
 </td>
 <td>
 
-Enables the get_thread_snapshot command without any pre-configured scope.
+允许在无预设作用域的情况下调用 get_thread_snapshot 命令。
 
 </td>
 </tr>
@@ -123,7 +123,7 @@ Enables the get_thread_snapshot command without any pre-configured scope.
 </td>
 <td>
 
-Denies the get_thread_snapshot command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 get_thread_snapshot 命令。
 
 </td>
 </tr>
@@ -136,7 +136,7 @@ Denies the get_thread_snapshot command without any pre-configured scope.
 </td>
 <td>
 
-Enables the list_config_files command without any pre-configured scope.
+允许在无预设作用域的情况下调用 list_config_files 命令。
 
 </td>
 </tr>
@@ -149,7 +149,7 @@ Enables the list_config_files command without any pre-configured scope.
 </td>
 <td>
 
-Denies the list_config_files command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 list_config_files 命令。
 
 </td>
 </tr>
@@ -162,7 +162,7 @@ Denies the list_config_files command without any pre-configured scope.
 </td>
 <td>
 
-Enables the list_threads command without any pre-configured scope.
+允许在无预设作用域的情况下调用 list_threads 命令。
 
 </td>
 </tr>
@@ -175,7 +175,7 @@ Enables the list_threads command without any pre-configured scope.
 </td>
 <td>
 
-Denies the list_threads command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 list_threads 命令。
 
 </td>
 </tr>
@@ -188,7 +188,7 @@ Denies the list_threads command without any pre-configured scope.
 </td>
 <td>
 
-Enables the resolve_config_profile command without any pre-configured scope.
+允许在无预设作用域的情况下调用 resolve_config_profile 命令。
 
 </td>
 </tr>
@@ -201,7 +201,7 @@ Enables the resolve_config_profile command without any pre-configured scope.
 </td>
 <td>
 
-Denies the resolve_config_profile command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 resolve_config_profile 命令。
 
 </td>
 </tr>
@@ -214,7 +214,7 @@ Denies the resolve_config_profile command without any pre-configured scope.
 </td>
 <td>
 
-Enables the resume_turn_stream command without any pre-configured scope.
+允许在无预设作用域的情况下调用 resume_turn_stream 命令。
 
 </td>
 </tr>
@@ -227,7 +227,7 @@ Enables the resume_turn_stream command without any pre-configured scope.
 </td>
 <td>
 
-Denies the resume_turn_stream command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 resume_turn_stream 命令。
 
 </td>
 </tr>
@@ -240,7 +240,7 @@ Denies the resume_turn_stream command without any pre-configured scope.
 </td>
 <td>
 
-Enables the start_turn command without any pre-configured scope.
+允许在无预设作用域的情况下调用 start_turn 命令。
 
 </td>
 </tr>
@@ -253,7 +253,7 @@ Enables the start_turn command without any pre-configured scope.
 </td>
 <td>
 
-Denies the start_turn command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 start_turn 命令。
 
 </td>
 </tr>
@@ -266,7 +266,7 @@ Denies the start_turn command without any pre-configured scope.
 </td>
 <td>
 
-Enables the submit_runtime_request command without any pre-configured scope.
+允许在无预设作用域的情况下调用 submit_runtime_request 命令。
 
 </td>
 </tr>
@@ -279,7 +279,7 @@ Enables the submit_runtime_request command without any pre-configured scope.
 </td>
 <td>
 
-Denies the submit_runtime_request command without any pre-configured scope.
+禁止在无预设作用域的情况下调用 submit_runtime_request 命令。
 
 </td>
 </tr>

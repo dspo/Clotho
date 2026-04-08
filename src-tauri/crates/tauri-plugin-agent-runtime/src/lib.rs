@@ -1,6 +1,8 @@
 use tauri::plugin::TauriPlugin;
 use tauri::Runtime;
 
+pub const PLUGIN_NAME: &str = "agent-runtime";
+
 pub use agent_core::{
     ActionPolicy, AgentDefinition, AgentError, AgentRuntime, ApprovalMode, AutomationHooks,
     Builder, ExecutionMode, FunctionToolDefinition, FunctionToolHandler, IntegrationRegistration,
@@ -22,7 +24,7 @@ pub use tauri_plugin_assistant_runtime::{
 };
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    tauri_plugin_assistant_runtime::init()
+    tauri_plugin_assistant_runtime::init_with_name(PLUGIN_NAME)
 }
 
 #[cfg(test)]
@@ -30,7 +32,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generic_plugin_exposes_legacy_init() {
+    fn generic_plugin_uses_agent_runtime_namespace() {
+        assert_eq!(PLUGIN_NAME, "agent-runtime");
         let _ = Builder::new();
     }
 }

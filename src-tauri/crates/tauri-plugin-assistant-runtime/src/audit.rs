@@ -4,9 +4,9 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager, Runtime};
 
+use crate::runtime_plugin_metadata;
 use crate::models::NativeToolAuditEntry;
 
-const AUDIT_DIRECTORY: &str = "assistant-runtime";
 const AUDIT_FILENAME: &str = "native-tool-audit.jsonl";
 
 pub fn audit_log_path<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
@@ -56,5 +56,6 @@ pub fn read_recent_native_tool_audits<R: Runtime>(
 
 fn resolve_audit_log_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
     let app_data_dir = app.path().app_data_dir().ok()?;
-    Some(app_data_dir.join(AUDIT_DIRECTORY).join(AUDIT_FILENAME))
+    let metadata = runtime_plugin_metadata(app);
+    Some(app_data_dir.join(metadata.audit_directory).join(AUDIT_FILENAME))
 }

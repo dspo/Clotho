@@ -19,6 +19,44 @@ pub use error::{Error, Result};
 pub use models::*;
 pub use session::{AssistantRuntimeState, StartedTurn, StreamDispatch};
 
+pub const LEGACY_PLUGIN_NAME: &str = "assistant-runtime";
+
+#[derive(Clone, Copy)]
+pub(crate) struct RuntimePluginMetadata {
+    pub(crate) plugin_name: &'static str,
+    pub(crate) status_event: &'static str,
+    pub(crate) threads_changed_event: &'static str,
+    pub(crate) debug_event: &'static str,
+    pub(crate) audit_directory: &'static str,
+}
+
+impl RuntimePluginMetadata {
+    fn for_plugin(plugin_name: &'static str) -> Self {
+        match plugin_name {
+            "agent-runtime" => Self {
+                plugin_name,
+                status_event: "agent-runtime://status",
+                threads_changed_event: "agent-runtime://threads-changed",
+                debug_event: "agent-runtime://debug",
+                audit_directory: "agent-runtime",
+            },
+            _ => Self {
+                plugin_name: LEGACY_PLUGIN_NAME,
+                status_event: "assistant-runtime://status",
+                threads_changed_event: "assistant-runtime://threads-changed",
+                debug_event: "assistant-runtime://debug",
+                audit_directory: LEGACY_PLUGIN_NAME,
+            },
+        }
+    }
+}
+
+pub(crate) fn runtime_plugin_metadata<R: Runtime>(app: &AppHandle<R>) -> RuntimePluginMetadata {
+    app.try_state::<RuntimePluginMetadata>()
+        .map(|state| *state.inner())
+        .unwrap_or(RuntimePluginMetadata::for_plugin(LEGACY_PLUGIN_NAME))
+}
+
 pub async fn start_headless_turn<R: Runtime>(
     app: AppHandle<R>,
     state: AssistantRuntimeState,
@@ -97,8 +135,9 @@ pub async fn interrupt_turn<R: Runtime>(
     runtime::interrupt_runtime_turn(app, state, thread_id, turn_id).await
 }
 
-pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    Builder::new("assistant-runtime")
+pub fn init_with_name<R: Runtime>(plugin_name: &'static str) -> TauriPlugin<R> {
+    let metadata = RuntimePluginMetadata::for_plugin(plugin_name);
+    Builder::new(metadata.plugin_name)
         .invoke_handler(tauri::generate_handler![
             commands::list_threads,
             commands::get_thread_snapshot,
@@ -111,9 +150,37 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::resolve_config_profile,
             commands::get_runtime_catalog,
         ])
-        .setup(|app, _api| {
+        .setup(move |app, _api| {
             app.manage(AssistantRuntimeState::default());
+            app.manage(metadata);
             Ok(())
         })
         .build()
+}
+
+pub fn init<R: Runtime>() -> TauriPlugin<R> {
+    init_with_name(LEGACY_PLUGIN_NAME)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RuntimePluginMetadata;
+
+    #[test]
+    fn agent_runtime_metadata_uses_agent_namespace() {
+        let metadata = RuntimePluginMetadata::for_plugin("agent-runtime");
+        assert_eq!(metadata.plugin_name, "agent-runtime");
+        assert_eq!(metadata.status_event, "agent-runtime://status");
+        assert_eq!(metadata.threads_changed_event, "agent-runtime://threads-changed");
+        assert_eq!(metadata.debug_event, "agent-runtime://debug");
+        assert_eq!(metadata.audit_directory, "agent-runtime");
+    }
+
+    #[test]
+    fn assistant_runtime_metadata_preserves_legacy_namespace() {
+        let metadata = RuntimePluginMetadata::for_plugin("assistant-runtime");
+        assert_eq!(metadata.plugin_name, "assistant-runtime");
+        assert_eq!(metadata.status_event, "assistant-runtime://status");
+        assert_eq!(metadata.audit_directory, "assistant-runtime");
+    }
 }

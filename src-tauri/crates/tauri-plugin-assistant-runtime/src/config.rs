@@ -16,9 +16,7 @@ fn project_config_path() -> Option<PathBuf> {
 }
 
 fn user_config_path() -> Option<PathBuf> {
-    env::var_os("HOME")
-        .map(PathBuf::from)
-        .map(|home| home.join(".codex").join("config.toml"))
+    dirs::home_dir().map(|home| home.join(".codex").join("config.toml"))
 }
 
 fn stringify_path(path: &Path) -> String {

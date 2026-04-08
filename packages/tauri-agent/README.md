@@ -1,33 +1,29 @@
 # @dspo/tauri-agent
 
-Typed client, shared runtime types, and declarative authoring helpers for the Tauri Agent Runtime Framework.
+`@dspo/tauri-agent` 是 Tauri Agent Runtime Framework 的 TypeScript 客户端 SDK，负责提供：
 
-This package now owns the shared runtime types that were previously app-local in Clotho.
+- 声明式 authoring API：`defineAgent(...)`、`defineDomain(...)`
+- 统一的类型安全客户端：`TauriAgentClient`
+- 默认 client：`defaultTauriAgentClient`
+- 共享 DTO：threads、turns、proposals、automation、runtime events
 
-It exposes:
-
-- `defineAgent(...)`
-- `defineDomain(...)`
-- `builtinPermissionSets`
-- `TauriAgentClient`
-- `defaultTauriAgentClient`
-- shared DTOs for threads, turns, proposals, automation, and runtime events
+## 最小示例
 
 ```ts
 import { defineAgent, defineDomain, defaultTauriAgentClient } from '@dspo/tauri-agent';
 
 const agent = defineAgent({
   id: 'planner',
-  instructions: 'Help the user plan work.',
+  instructions: '帮助用户规划任务并生成提案。',
 });
 
 const domain = defineDomain({
   id: 'planning',
   resources: [{ resourceId: 'task-db', required: true }],
-  actions: [{ id: 'draft-plan', description: 'Prepare a safe plan' }],
+  actions: [{ id: 'draft-plan', description: '生成安全提案' }],
 });
 
 const thread = await defaultTauriAgentClient.createThread({ title: 'Planning' });
 ```
 
-Compatibility note: the Rust-facing framework crate is `tauri-plugin-agent-runtime`, while the current client still defaults to the legacy `assistant-runtime` plugin namespace so existing hosts keep working during migration.
+默认插件命名空间为 `agent-runtime`。如果你仍在维护旧宿主，可通过 `new TauriAgentClient({ plugin: 'assistant-runtime' })` 显式覆盖。

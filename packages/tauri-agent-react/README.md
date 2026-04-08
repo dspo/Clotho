@@ -1,11 +1,15 @@
 # @dspo/tauri-agent-react
 
-Minimal React bindings for the Tauri Agent Runtime Framework.
+`@dspo/tauri-agent-react` 提供最小可复用的 React 绑定，适合宿主快速拼出 transcript / proposal / audit UI。
 
-- `Transcript` renders runtime conversation blocks.
-- `ProposalSummary` renders proposal metadata.
-- `AuditTrail` renders native tool audit rows.
-- `useAgentStatus` subscribes to runtime status events.
+## 公开能力
+
+- `Transcript`
+- `ProposalSummary`
+- `AuditTrail`
+- `useAgentStatus`
+
+## 示例
 
 ```tsx
 import { defaultTauriAgentClient } from '@dspo/tauri-agent';
@@ -16,7 +20,7 @@ export function AgentSurface({ blocks }: { blocks: any[] }) {
 
   return (
     <section>
-      <p>Observed events: {events.length}</p>
+      <p>观察到的状态事件数：{events.length}</p>
       <Transcript blocks={blocks} />
     </section>
   );

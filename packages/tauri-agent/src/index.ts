@@ -404,6 +404,12 @@ export interface TauriAgentClientOptions {
   debugEvent?: string;
 }
 
+export const DEFAULT_TAURI_AGENT_PLUGIN = 'agent-runtime' as const;
+export const DEFAULT_TAURI_AGENT_STATUS_EVENT = 'agent-runtime://status' as const;
+export const DEFAULT_TAURI_AGENT_THREADS_CHANGED_EVENT =
+  'agent-runtime://threads-changed' as const;
+export const DEFAULT_TAURI_AGENT_DEBUG_EVENT = 'agent-runtime://debug' as const;
+
 export class TauriAgentClient {
   readonly plugin: string;
   readonly statusEvent: string;
@@ -411,11 +417,11 @@ export class TauriAgentClient {
   readonly debugEvent: string;
 
   constructor(options: TauriAgentClientOptions = {}) {
-    this.plugin = options.plugin ?? 'assistant-runtime';
-    this.statusEvent = options.statusEvent ?? 'assistant-runtime://status';
+    this.plugin = options.plugin ?? DEFAULT_TAURI_AGENT_PLUGIN;
+    this.statusEvent = options.statusEvent ?? DEFAULT_TAURI_AGENT_STATUS_EVENT;
     this.threadsChangedEvent =
-      options.threadsChangedEvent ?? 'assistant-runtime://threads-changed';
-    this.debugEvent = options.debugEvent ?? 'assistant-runtime://debug';
+      options.threadsChangedEvent ?? DEFAULT_TAURI_AGENT_THREADS_CHANGED_EVENT;
+    this.debugEvent = options.debugEvent ?? DEFAULT_TAURI_AGENT_DEBUG_EVENT;
   }
 
   private command<T>(name: string, args?: InvokeArgs) {
