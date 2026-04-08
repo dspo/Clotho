@@ -80,8 +80,6 @@ jobs:
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
-            libsystemd0:arm64 \
-            libudev1:arm64 \
             libcap-dev:arm64 \
             libssl-dev:arm64 \
             libwebkit2gtk-4.1-dev:arm64 \
