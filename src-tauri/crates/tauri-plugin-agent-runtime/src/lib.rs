@@ -1,3 +1,8 @@
+//! `tauri-plugin-agent-runtime` 是框架对外统一的 plugin 入口。
+//!
+//! 新宿主应用应直接依赖本 crate，并使用 `agent-runtime` namespace。
+//! `tauri-plugin-assistant-runtime` 仅保留给历史宿主作为兼容别名。
+
 use tauri::plugin::TauriPlugin;
 use tauri::Runtime;
 

@@ -1,3 +1,9 @@
+//! `tauri-plugin-assistant-runtime` 是遗留兼容层。
+//!
+//! 它存在的唯一目的，是让仍然绑定 `assistant-runtime` namespace 的历史宿主
+//! 在迁移到 `tauri-plugin-agent-runtime` 之前保持可运行。
+//! 新宿主应用不应直接以本 crate 作为主入口。
+
 mod audit;
 mod catalog;
 mod commands;
