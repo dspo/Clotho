@@ -1,0 +1,18 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = """
+Default permissions for the embedded assistant runtime bridge.
+"""
+permissions = [
+  "allow-list-threads",
+  "allow-get-thread-snapshot",
+  "allow-create-thread",
+  "allow-start-turn",
+  "allow-resume-turn-stream",
+  "allow-cancel-turn",
+  "allow-submit-runtime-request",
+  "allow-list-config-files",
+  "allow-resolve-config-profile",
+  "allow-get-runtime-catalog",
+]

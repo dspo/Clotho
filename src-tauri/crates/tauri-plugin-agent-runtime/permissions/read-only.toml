@@ -1,0 +1,14 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "read-only"
+description = """
+Read-only agent runtime permissions: list threads, inspect snapshots, list configs, and inspect catalog.
+"""
+commands.allow = [
+  "list_threads",
+  "get_thread_snapshot",
+  "list_config_files",
+  "resolve_config_profile",
+  "get_runtime_catalog",
+]

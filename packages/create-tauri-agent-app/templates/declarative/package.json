@@ -1,0 +1,8 @@
+{
+  "name": "declarative-agent-app",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@dspo/tauri-agent": "workspace:*"
+  }
+}

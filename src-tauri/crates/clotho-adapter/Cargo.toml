@@ -1,0 +1,12 @@
+[package]
+name = "clotho-adapter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clotho-domain = { path = "../clotho-domain" }
+
+[lib]
+name = "clotho_adapter"
+path = "src/lib.rs"
+crate-type = ["rlib"]

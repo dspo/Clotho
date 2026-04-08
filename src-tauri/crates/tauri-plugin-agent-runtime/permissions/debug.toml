@@ -1,0 +1,19 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "debug"
+description = """
+Debug agent runtime permissions: operator access plus interruption for local debugging and recovery.
+"""
+commands.allow = [
+  "list_threads",
+  "get_thread_snapshot",
+  "create_thread",
+  "start_turn",
+  "resume_turn_stream",
+  "cancel_turn",
+  "submit_runtime_request",
+  "list_config_files",
+  "resolve_config_profile",
+  "get_runtime_catalog",
+]

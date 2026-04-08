@@ -1,0 +1,20 @@
+[package]
+name = "tauri-plugin-agent-runtime"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+links = "tauri-plugin-agent-runtime"
+
+[lib]
+name = "tauri_plugin_agent_runtime"
+path = "src/lib.rs"
+
+[dependencies]
+agent-core = { path = "../agent-core" }
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+tauri-plugin-assistant-runtime = { path = "../tauri-plugin-assistant-runtime" }
+thiserror = "1"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

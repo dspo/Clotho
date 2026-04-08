@@ -5,12 +5,13 @@ description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 
+[workspace]
+members = ["crates/*"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+# Keep the existing app entrypoint stable while the framework lands separately.
 name = "clotho_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -20,14 +21,25 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+tauri-plugin-agent-runtime = { path = "crates/tauri-plugin-agent-runtime" }
+clotho-domain = { path = "crates/clotho-domain" }
+clotho-adapter = { path = "crates/clotho-adapter" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.32.1", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 base64 = "0.22"
 rmcp = { version = "0.17", features = ["server", "transport-streamable-http-server"] }
 axum = { version = "0.8", features = ["http1"] }
-tokio = { version = "1", features = ["net"] }
+tokio = { version = "1", features = ["net", "rt", "sync", "time"] }
 tokio-util = { version = "0.7" }
+
+[patch.crates-io]
+winres = { path = "patches/winres" }
+tokio-tungstenite = { git = "https://github.com/openai-oss-forks/tokio-tungstenite", rev = "132f5b39c862e3a970f731d709608b3e6276d5f6" }
+tungstenite = { git = "https://github.com/openai-oss-forks/tungstenite-rs", rev = "9200079d3b54a1ff51072e24d81fd354f085156f" }
+
+[patch."ssh://git@github.com/openai-oss-forks/tungstenite-rs.git"]
+tungstenite = { git = "https://github.com/openai-oss-forks/tungstenite-rs", rev = "9200079d3b54a1ff51072e24d81fd354f085156f" }
