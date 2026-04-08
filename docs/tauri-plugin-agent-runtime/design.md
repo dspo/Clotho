@@ -18,7 +18,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 3. docs/src/architecture/assistant-codex-contracts.md
 4. docs/src/architecture/assistant-codex-proposal-schema.md
 5. docs/src/architecture/assistant-codex-phase0-freeze.md
-6. src-tauri/crates/tauri-plugin-assistant-runtime/
+6. src-tauri/crates/tauri-plugin-agent-runtime/
 7. src-tauri/crates/clotho-domain/
 8. src-tauri/src/lib.rs
 9. src/services/assistant-runtime-client.ts
@@ -27,7 +27,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 
 当前现实（不要把仓库当空项目）
 - 已有 embedded Codex runtime、thread/turn/channel、native tools、proposal/apply、automation 主链。
-- tauri-plugin-assistant-runtime 直接依赖 clotho-domain（需抽离）。
+- tauri-plugin-agent-runtime 仍通过 clotho-adapter 承载 Clotho 侧 domain wiring（需继续收紧宿主边界）。
 - native tools、proposal schema、skills、catalog 等带有 Clotho 领域耦合。
 - 前端类型安全客户端与 types 仍在 app 内部（需抽成 npm SDK）。
 - 目前只有 default 权限集，需扩展为至少 read-only/operator/automation/debug。
@@ -51,7 +51,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 - Rust:
   - 新 crate src-tauri/crates/agent-core（通用抽象、公共 API）。
   - 新 crate src-tauri/crates/tauri-plugin-agent-runtime（通用 Tauri plugin）。
-  - 对现有 src-tauri/crates/tauri-plugin-assistant-runtime 做兼容迁移：要么转成 shim/re-export，要么迁移并删除旧命名，但 Clotho app 必须可运行。
+  - 把 runtime 主链统一收敛到 src-tauri/crates/tauri-plugin-agent-runtime，并删除旧命名入口，但 Clotho app 必须可运行。
   - 把 clotho-domain 相关逻辑从 plugin 中剥离到宿主适配层或单独 crate（例如 src-tauri/crates/clotho-adapter）。
   - 在 agent-core 中暴露公共 API（Builder、AgentDefinition、FunctionToolDefinition、FunctionToolHandler、ToolProvider、SkillCatalogRegistration、IntegrationRegistration、ActionPolicy、OutputContract、AutomationHooks 及 supporting types）。
   - 实现 permission sets（至少 read-only/operator/automation/debug）。
@@ -64,7 +64,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
   - examples/ 或 templates/ 提供最少一个非 Clotho 的 demo，证明框架通用。
 
 - 文档：
-  - docs 增补 quickstart、concepts（framework-oriented）、security/permission、migration（从 tauri-plugin-assistant-runtime/clotho-domain 到新框架的迁移步骤与兼容策略）。
+  - docs 增补 quickstart、concepts（framework-oriented）、security/permission、migration（从旧 app-side/runtime 结构到新框架的迁移步骤）。
 
 - 测试/验证：
   - Rust 单元测试/集成测试覆盖新抽象与 plugin。
@@ -76,7 +76,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 实现顺序（优先保证仓库不断可用）
 1. 全量代码+文档审计（生成内部实施清单，仅供 agent 自用，不在此停留）。
 2. 在 src-tauri/crates/ 下创建 agent-core（核心抽象）并实现基本 API（空实现也要有测试和文档）。
-3. 创建 tauri-plugin-agent-runtime（基于 agent-core 的 Tauri 插件 skeleton），把现有 tauri-plugin-assistant-runtime 中通用逻辑迁移进来。
+3. 创建 tauri-plugin-agent-runtime（基于 agent-core 的 Tauri 插件 skeleton），并把 runtime 主链实现整体收敛进去。
 4. 在迁移过程中，把 Clotho 专用逻辑抽到宿主适配层（clotho-adapter crate 或 app-side module），确保有 thin shim 维持兼容。
 5. 修改 src-tauri/src/lib.rs 和 app 的 plugin 注册，使其使用新的通用 plugin；确保 Clotho 在每一步的中间状态都能恢复并通过 smoke test。
 6. 在 JS 侧改造为 pnpm workspace（packages/...），抽出 tauri-agent 与 tauri-agent-react、create-tauri-agent-app。

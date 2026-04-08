@@ -7,15 +7,12 @@
 3. React 宿主按需使用 `@dspo/tauri-agent-react`
 4. 新项目可用 `create-tauri-agent-app` 起模板
 
-`tauri-plugin-assistant-runtime` 不是面向宿主的公共入口，而是仓库内部实现 crate；**新的宿主应用不应直接以它作为主入口**。
-
 ## 目录结构与职责
 
 | 路径 / 包 | 作用 |
 | --- | --- |
 | `src-tauri/crates/agent-core` | 通用抽象：`Builder`、`AgentDefinition`、`FunctionToolDefinition`、`ToolProvider`、`ActionPolicy`、`OutputContract` |
-| `src-tauri/crates/tauri-plugin-agent-runtime` | 对外统一的 Tauri plugin 入口，插件命名空间为 `agent-runtime` |
-| `src-tauri/crates/tauri-plugin-assistant-runtime` | 仓库内部实现 crate，承载当前 thread/turn/stream/runtime 主链实现 |
+| `src-tauri/crates/tauri-plugin-agent-runtime` | 对外统一的 Tauri plugin 入口，同时承载 runtime engine、thread/turn/stream 主链实现，插件命名空间为 `agent-runtime` |
 | `src-tauri/crates/clotho-adapter` | 让 runtime 先依赖通用 adapter，再由宿主接 Clotho domain |
 | `packages/tauri-agent` | 类型安全客户端、共享 DTO、`defineAgent` / `defineDomain` |
 | `packages/tauri-agent-react` | transcript / proposal / audit 的最小 React 组件与 hooks |
@@ -345,12 +342,7 @@ node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs operator ./m
 2. 保持 PR 与 CI 绑定到明确的 Codex 快照
 3. 避免上游漂移让 framework surface 悄悄变化
 
-### 旧入口如何处理
-
-- **新宿主入口**：`tauri-plugin-agent-runtime`
-- **旧入口**：`tauri-plugin-assistant-runtime`
-
-`tauri-plugin-assistant-runtime` 不作为新的公共入口暴露。新集成一律应：
+### 统一入口
 
 1. 使用 `agent-runtime` 插件命名空间
 2. 使用 `agent-runtime:*` capability 权限

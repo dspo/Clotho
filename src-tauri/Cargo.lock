@@ -10296,17 +10296,6 @@ name = "tauri-plugin-agent-runtime"
 version = "0.1.0"
 dependencies = [
  "agent-core",
- "serde",
- "tauri",
- "tauri-plugin",
- "tauri-plugin-assistant-runtime",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "tauri-plugin-assistant-runtime"
-version = "0.1.0"
-dependencies = [
  "chrono",
  "clotho-adapter",
  "codex-app-server-client",

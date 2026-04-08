@@ -26,4 +26,4 @@ const domain = defineDomain({
 const thread = await defaultTauriAgentClient.createThread({ title: 'Planning' });
 ```
 
-默认插件命名空间为 `agent-runtime`。如果你仍在维护旧宿主，可通过 `new TauriAgentClient({ plugin: 'assistant-runtime' })` 显式覆盖。
+默认插件命名空间为 `agent-runtime`。

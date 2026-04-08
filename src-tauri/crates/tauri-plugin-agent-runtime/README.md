@@ -14,6 +14,7 @@ tauri-plugin-agent-runtime = { git = "https://github.com/dspo/Clotho.git" }
 - `init()`：注册 `agent-runtime` plugin
 - 从 `agent-core` 重新导出的公共抽象
 - 与 thread / turn / stream / catalog 相关的共享 runtime 类型
+- 内置的 runtime engine、native tools、proposal / audit / config / catalog 实现
 
 ## 最小注册
 
@@ -31,5 +32,5 @@ fn main() {
 ## 迁移说明
 
 - 新宿主统一使用 `tauri-plugin-agent-runtime`
-- `tauri-plugin-assistant-runtime` 只是仓库内部实现 crate，不是新的宿主入口
 - capability 配置中应统一引用 `agent-runtime:*`
+- 本仓库已将原先分散的 runtime 实现收敛进当前 crate
