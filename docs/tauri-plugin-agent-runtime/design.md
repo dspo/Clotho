@@ -41,7 +41,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 5. 写数据库边界保留给宿主应用；框架提供治理边界（proposal/simulate/apply/approval/policy/audit/automation hook）。
 6. v1 优先声明式定义（defineAgent/defineDomain），trait/高级扩展次之。
 7. 支持多 provider adapter，从 Day1 不绑死单一 provider。
-8. 保留 Clotho 兼容层，但同时引入 framework-native contract extension。
+8. 保留 Clotho 侧接入边界，但同时引入 framework-native contract extension。
 9. automation 为框架一等能力，但可配置/可禁用/可审计。
 10. React 包首版最小可用，headless SDK 不依赖 UI。
 11. 注册期冻结结构性定义（id/binding/capability/permission/policy），运行时仅允许有限覆盖（模型配置、输入、profile、少量 instructions/context）。
@@ -125,20 +125,20 @@ API 建议（可直接作为实现参考）
 
 停止条件（仅在这些真实阻塞时才停止并向我汇报）
 - 需要外部密钥、私有 registry/凭据或组织级权限（例如发布到 crates.io/npm registry 的凭据）才能继续关键步骤。
-- 需要产品 owner 的交互式决策（例如：是否弃用旧 API 并强制删除兼容层），且无法用合理默认值继续。
+- 需要产品 owner 的交互式决策（例如：是否弃用旧 API 并强制删除旧接入路径），且无法用合理默认值继续。
 - 发现仓库存在未关联到本任务的、本质上危险或敏感的改动（例如包含凭据）的情况下先暂停并汇报。
 
 最终交付的总结（在完成后必须给出）
 - 新增/重构的 crate/package/module 列表（按路径）。
 - 关键公共 API（类型/函数/trait/方法）和兼容迁移策略（旧名如何 shim/重定向）。
-- Clotho 宿主如何继续工作的说明（调用路径/兼容层位置/演示步骤）。
+- Clotho 宿主如何继续工作的说明（调用路径/接入边界位置/演示步骤）。
 - 运行的测试/构建命令与实际结果（通过/失败与修复说明）。
 - 剩余的、且确为非阻塞的限制项（必须是真正无法在当前环境解决的），并解释原因。
 
 额外要求（行为规范）
 - 不要把“以后抽”放在注释里；需要抽的这次就抽。
 - 不要长时间把仓库置于破坏状态；每完成重要切片就恢复 Clotho 宿主的可运行性并做 smoke test。
-- 兼容层必须尽可能薄；不要留下长期维护成本。
+- 旧接入路径必须尽可能薄；不要留下长期维护成本。
 - 所有新增 crate/package 都要有 README、Cargo.toml/package.json、build script、基本示例和本地 smoke 测试命令（但不强制实际发布）。
 - 在每次关键修改后执行相应的测试和构建并记录结果；若失败先修直至通过。
 

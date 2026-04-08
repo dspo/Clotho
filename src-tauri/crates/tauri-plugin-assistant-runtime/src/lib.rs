@@ -1,8 +1,9 @@
-//! `tauri-plugin-assistant-runtime` 是遗留兼容层。
+//! `tauri-plugin-assistant-runtime` 是仓库内部实现 crate。
 //!
-//! 它存在的唯一目的，是让仍然绑定 `assistant-runtime` namespace 的历史宿主
-//! 在迁移到 `tauri-plugin-agent-runtime` 之前保持可运行。
-//! 新宿主应用不应直接以本 crate 作为主入口。
+//! 这个 crate 当前承载 runtime engine、thread/turn/stream 主链与
+//! `assistant-runtime` namespace 的内部实现细节。
+//! 对外面向宿主的唯一入口是 `tauri-plugin-agent-runtime`；
+//! 新宿主应用不应直接以本 crate 作为公共入口。
 
 mod audit;
 mod catalog;
@@ -183,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn assistant_runtime_metadata_preserves_legacy_namespace() {
+    fn assistant_runtime_metadata_keeps_assistant_namespace() {
         let metadata = RuntimePluginMetadata::for_plugin("assistant-runtime");
         assert_eq!(metadata.plugin_name, "assistant-runtime");
         assert_eq!(metadata.status_event, "assistant-runtime://status");

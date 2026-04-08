@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 links = "tauri-plugin-assistant-runtime"
+publish = false
 
 [lib]
 name = "tauri_plugin_assistant_runtime"

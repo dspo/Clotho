@@ -31,5 +31,5 @@ fn main() {
 ## 迁移说明
 
 - 新宿主统一使用 `tauri-plugin-agent-runtime`
-- 旧的 `tauri-plugin-assistant-runtime` 仅保留为兼容别名
+- `tauri-plugin-assistant-runtime` 只是仓库内部实现 crate，不是新的宿主入口
 - capability 配置中应统一引用 `agent-runtime:*`
