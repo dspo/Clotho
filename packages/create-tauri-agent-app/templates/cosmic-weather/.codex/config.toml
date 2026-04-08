@@ -1,0 +1,19 @@
+model = "gpt-5.4"
+model_provider = "openai"
+approval_policy = "never"
+sandbox_mode = "read-only"
+
+[model_providers.openai]
+env_key = "OPENAI_API_KEY"
+wire_api = "responses"
+
+[profiles.compat]
+model = "gpt-4.1"
+model_provider = "compat"
+approval_policy = "never"
+sandbox_mode = "read-only"
+
+[profiles.compat.model_providers.compat]
+base_url = "https://your-openai-compatible-endpoint/v1"
+env_key = "COMPAT_API_KEY"
+wire_api = "chat_completions"

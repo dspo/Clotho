@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use agent_core::AgentRuntime;
 use chrono::Utc;
 use clotho_adapter::ProposalPayload;
 use codex_app_server_protocol::RequestId;
@@ -9,21 +10,30 @@ use serde_json::{json, Value};
 use tauri::ipc::Channel;
 use uuid::Uuid;
 
-use crate::config;
+use crate::config::{DefaultConfigProvider, SharedConfigProvider};
 use crate::error::{Error, Result};
 use crate::models::{
     AssistantTurnStreamEnvelope, ConfigSelection, ConversationBlock, CreateThreadResponse,
-    ListThreadsRequest, ListThreadsResponse, PendingRuntimeRequest, ResolvedConfig, ThreadSnapshot,
-    ThreadSummary, TurnSummarySnapshot,
+    ListConfigsResponse, ListThreadsRequest, ListThreadsResponse, PendingRuntimeRequest,
+    ResolvedConfig, ThreadSnapshot, ThreadSummary, TurnSummarySnapshot,
 };
 use crate::runtime::EmbeddedCodexRuntime;
 
 const DEFAULT_THREAD_TITLE: &str = "新对话";
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct AssistantRuntimeState {
     inner: Arc<Mutex<AssistantRuntimeInner>>,
     runtime: EmbeddedCodexRuntime,
+    config_provider: SharedConfigProvider,
+    agent_runtime: Option<Arc<AgentRuntime>>,
+    include_builtin_native_tools: bool,
+}
+
+impl Default for AssistantRuntimeState {
+    fn default() -> Self {
+        Self::new(Arc::new(DefaultConfigProvider::default()), None, true)
+    }
 }
 
 #[derive(Default)]
@@ -97,8 +107,52 @@ pub struct PendingRuntimeRequestHandle {
 }
 
 impl AssistantRuntimeState {
+    pub fn new(
+        config_provider: SharedConfigProvider,
+        agent_runtime: Option<Arc<AgentRuntime>>,
+        include_builtin_native_tools: bool,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(AssistantRuntimeInner::default())),
+            runtime: EmbeddedCodexRuntime::default(),
+            config_provider,
+            agent_runtime,
+            include_builtin_native_tools,
+        }
+    }
+
     pub fn runtime(&self) -> &EmbeddedCodexRuntime {
         &self.runtime
+    }
+
+    pub fn config_provider(&self) -> SharedConfigProvider {
+        self.config_provider.clone()
+    }
+
+    pub fn agent_runtime(&self) -> Option<Arc<AgentRuntime>> {
+        self.agent_runtime.clone()
+    }
+
+    pub fn include_builtin_native_tools(&self) -> bool {
+        self.include_builtin_native_tools
+    }
+
+    pub fn list_configs(&self) -> Result<ListConfigsResponse> {
+        self.config_provider.list_configs()
+    }
+
+    pub fn resolve_config_selection(
+        &self,
+        selection: Option<ConfigSelection>,
+    ) -> Result<ResolvedConfig> {
+        self.config_provider.resolve_config(selection.as_ref())
+    }
+
+    pub fn request_overrides(
+        &self,
+        selection: Option<&ConfigSelection>,
+    ) -> Result<HashMap<String, Value>> {
+        self.config_provider.request_overrides(selection)
     }
 
     pub fn list_threads(&self, req: ListThreadsRequest) -> ListThreadsResponse {
@@ -150,8 +204,8 @@ impl AssistantRuntimeState {
 
         let config_context = thread
             .config_context
-            .as_ref()
-            .map(resolve_config_from_selection)
+            .clone()
+            .map(|selection| self.resolve_config_selection(Some(selection)))
             .transpose()?;
 
         let active_turn = thread
@@ -820,13 +874,6 @@ impl AssistantRuntimeState {
         });
         Value::Array(runs.into_iter().take(limit.max(1)).collect())
     }
-}
-
-fn resolve_config_from_selection(selection: &ConfigSelection) -> Result<ResolvedConfig> {
-    config::resolve_config_profile(
-        selection.config_file_path.clone(),
-        selection.profile.clone(),
-    )
 }
 
 fn should_derive_title(thread: &ThreadRecord) -> bool {

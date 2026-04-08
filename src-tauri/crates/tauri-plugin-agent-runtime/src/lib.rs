@@ -4,6 +4,8 @@
 //! catalog/wiring 全部收敛在本 crate 中，对外统一暴露 `agent-runtime`
 //! namespace。
 
+use std::sync::Arc;
+
 mod audit;
 mod catalog;
 mod commands;
@@ -27,15 +29,84 @@ pub use agent_core::{
     ActionPolicy, AgentDefinition, AgentError, AgentRuntime, ApprovalMode, AutomationHooks,
     Builder, ExecutionMode, FunctionToolDefinition, FunctionToolHandler, IntegrationRegistration,
     ModelProfile, OutputContract, PermissionSet, ProviderRegistration, ResourceBinding,
-    RuntimeConfig, SkillBinding, SkillCatalogRegistration, ToolBinding, ToolProvider, UiMetadata,
-    Visibility,
+    RuntimeConfig, RuntimeContext, SkillBinding, SkillCatalogRegistration, ToolBinding,
+    ToolContext, ToolProvider, UiMetadata, Visibility,
 };
+pub use config::{ConfigProvider, DefaultConfigProvider, TomlConfigProvider};
 pub use error::{Error, Result};
 pub use models::*;
 pub use session::{AssistantRuntimeState, StartedTurn, StreamDispatch};
 pub type AgentRuntimeState = AssistantRuntimeState;
 pub type AgentStatusEventEnvelope = AssistantStatusEventEnvelope;
 pub type AgentTurnStreamEnvelope = AssistantTurnStreamEnvelope;
+
+pub struct AgentRuntimePluginBuilder {
+    config_provider: Option<Arc<dyn ConfigProvider>>,
+    agent_runtime: Option<Arc<AgentRuntime>>,
+    include_builtin_native_tools: bool,
+}
+
+impl Default for AgentRuntimePluginBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AgentRuntimePluginBuilder {
+    pub fn new() -> Self {
+        Self {
+            config_provider: None,
+            agent_runtime: None,
+            include_builtin_native_tools: true,
+        }
+    }
+
+    pub fn config_provider(mut self, config_provider: Arc<dyn ConfigProvider>) -> Self {
+        self.config_provider = Some(config_provider);
+        self
+    }
+
+    pub fn agent_runtime(mut self, agent_runtime: AgentRuntime) -> Self {
+        self.agent_runtime = Some(Arc::new(agent_runtime));
+        self
+    }
+
+    pub fn include_builtin_native_tools(mut self, include_builtin_native_tools: bool) -> Self {
+        self.include_builtin_native_tools = include_builtin_native_tools;
+        self
+    }
+
+    pub fn build<R: Runtime>(self) -> TauriPlugin<R> {
+        let config_provider = self
+            .config_provider
+            .unwrap_or_else(|| Arc::new(DefaultConfigProvider::default()));
+        let agent_runtime = self.agent_runtime;
+        let include_builtin_native_tools = self.include_builtin_native_tools;
+
+        PluginBuilder::new(PLUGIN_NAME)
+            .invoke_handler(tauri::generate_handler![
+                commands::list_threads,
+                commands::get_thread_snapshot,
+                commands::create_thread,
+                commands::start_turn,
+                commands::resume_turn_stream,
+                commands::cancel_turn,
+                commands::submit_runtime_request,
+                commands::list_configs,
+                commands::resolve_config,
+                commands::get_runtime_catalog,
+            ])
+            .setup(move |app, _api| {
+                app.manage(AssistantRuntimeState::new(
+                    config_provider.clone(),
+                    agent_runtime.clone(),
+                    include_builtin_native_tools,
+                ));
+                Ok(())
+            })
+            .build()
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(crate) struct RuntimePluginMetadata {
@@ -135,29 +206,21 @@ pub async fn interrupt_turn<R: Runtime>(
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    PluginBuilder::new(PLUGIN_NAME)
-        .invoke_handler(tauri::generate_handler![
-            commands::list_threads,
-            commands::get_thread_snapshot,
-            commands::create_thread,
-            commands::start_turn,
-            commands::resume_turn_stream,
-            commands::cancel_turn,
-            commands::submit_runtime_request,
-            commands::list_config_files,
-            commands::resolve_config_profile,
-            commands::get_runtime_catalog,
-        ])
-        .setup(|app, _api| {
-            app.manage(AssistantRuntimeState::default());
-            Ok(())
-        })
-        .build()
+    AgentRuntimePluginBuilder::new().build()
+}
+
+pub fn init_with_builder<R: Runtime>(builder: AgentRuntimePluginBuilder) -> TauriPlugin<R> {
+    builder.build()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Builder, PLUGIN_NAME, RUNTIME_PLUGIN_METADATA};
+    use std::sync::Arc;
+
+    use super::{
+        AgentRuntimePluginBuilder, Builder, DefaultConfigProvider, PLUGIN_NAME,
+        RUNTIME_PLUGIN_METADATA,
+    };
 
     #[test]
     fn agent_runtime_metadata_uses_agent_namespace() {
@@ -170,5 +233,7 @@ mod tests {
         assert_eq!(RUNTIME_PLUGIN_METADATA.debug_event, "agent-runtime://debug");
         assert_eq!(RUNTIME_PLUGIN_METADATA.audit_directory, "agent-runtime");
         let _ = Builder::new();
+        let _ = AgentRuntimePluginBuilder::new()
+            .config_provider(Arc::new(DefaultConfigProvider::default()));
     }
 }

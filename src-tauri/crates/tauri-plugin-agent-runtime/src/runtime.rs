@@ -1,17 +1,19 @@
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
+use agent_core::{AgentError, RuntimeContext, ToolContext};
 use codex_app_server_client::{
     InProcessAppServerClient, InProcessAppServerRequestHandle, InProcessClientStartArgs,
     InProcessServerEvent, TypedRequestError, DEFAULT_IN_PROCESS_CHANNEL_CAPACITY,
 };
 use codex_app_server_protocol::{
     ClientRequest, CodexErrorInfo, ConfigWarningNotification, DynamicToolCallOutputContentItem,
-    ItemCompletedNotification, ItemStartedNotification, JSONRPCErrorError,
-    ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification, RequestId,
-    ServerNotification, ServerRequest, ThreadItem, ThreadStartParams, ThreadStartResponse,
-    TurnCompletedNotification, TurnInterruptParams, TurnInterruptResponse, TurnStartParams,
-    TurnStartResponse, TurnStartedNotification, TurnStatus, UserInput,
+    DynamicToolCallParams, DynamicToolCallResponse, DynamicToolSpec, ItemCompletedNotification,
+    ItemStartedNotification, JSONRPCErrorError, ReasoningSummaryTextDeltaNotification,
+    ReasoningTextDeltaNotification, RequestId, ServerNotification, ServerRequest, ThreadItem,
+    ThreadStartParams, ThreadStartResponse, TurnCompletedNotification, TurnInterruptParams,
+    TurnInterruptResponse, TurnStartParams, TurnStartResponse, TurnStartedNotification, TurnStatus,
+    UserInput,
 };
 use codex_arg0::Arg0DispatchPaths;
 use codex_core::config::ConfigBuilder;
@@ -24,7 +26,6 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Runtime};
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use crate::config;
 use crate::db;
 use crate::error::{Error, Result};
 use crate::events;
@@ -298,17 +299,16 @@ async fn ensure_runtime_thread(
         return Ok(runtime_thread_id);
     }
 
-    let request_overrides = config_context
-        .map(config::request_overrides_from_selection)
-        .transpose()?;
+    let request_overrides = state.request_overrides(config_context)?;
+    let dynamic_tools = dynamic_tool_specs(state).await;
 
     let response: ThreadStartResponse = request_handle
         .request_typed(ClientRequest::ThreadStart {
             request_id: next_request_id(),
             params: ThreadStartParams {
                 cwd: Some(current_dir_string()?),
-                config: request_overrides,
-                dynamic_tools: Some(native_tools::specs()),
+                config: Some(request_overrides),
+                dynamic_tools: (!dynamic_tools.is_empty()).then_some(dynamic_tools),
                 ..Default::default()
             },
         })
@@ -377,7 +377,7 @@ async fn handle_server_request<R: Runtime>(
 ) -> Result<()> {
     match request {
         ServerRequest::DynamicToolCall { request_id, params } => {
-            let response = native_tools::execute(app, state, &params);
+            let response = execute_dynamic_tool(app, state, &params).await;
             let result = serde_json::to_value(response)?;
             client
                 .resolve_server_request(request_id, result)
@@ -581,6 +581,94 @@ async fn handle_server_request<R: Runtime>(
         }
     }
     Ok(())
+}
+
+async fn dynamic_tool_specs(state: &AssistantRuntimeState) -> Vec<DynamicToolSpec> {
+    let mut specs = Vec::new();
+
+    if state.include_builtin_native_tools() {
+        specs.extend(native_tools::specs());
+    }
+
+    if let Some(agent_runtime) = state.agent_runtime() {
+        let runtime_ctx = RuntimeContext {
+            agent_id: None,
+            permission: agent_runtime.config().default_permission.clone(),
+        };
+        for tool in agent_runtime.list_dynamic_tools(&runtime_ctx).await {
+            if specs.iter().any(|existing| existing.name == tool.id) {
+                continue;
+            }
+            specs.push(function_tool_to_dynamic_spec(tool));
+        }
+    }
+
+    specs
+}
+
+async fn execute_dynamic_tool<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &AssistantRuntimeState,
+    params: &DynamicToolCallParams,
+) -> DynamicToolCallResponse {
+    if let Some(agent_runtime) = state.agent_runtime() {
+        let local_turn = state.resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id);
+        let permission = agent_runtime.config().default_permission.clone();
+        let tool_ctx = ToolContext {
+            agent_id: None,
+            thread_id: local_turn.as_ref().map(|(thread_id, _)| thread_id.clone()),
+            turn_id: local_turn.as_ref().map(|(_, turn_id)| turn_id.clone()),
+            permission,
+        };
+
+        match agent_runtime
+            .invoke_tool(&tool_ctx, &params.tool, params.arguments.clone())
+            .await
+        {
+            Ok(value) => return dynamic_tool_response(value, true),
+            Err(AgentError::MissingRegistration(_)) => {}
+            Err(err) => {
+                return dynamic_tool_response(
+                    json!({
+                        "error": err.to_string(),
+                        "tool": params.tool,
+                    }),
+                    false,
+                );
+            }
+        }
+    }
+
+    if state.include_builtin_native_tools() {
+        native_tools::execute(app, state, params)
+    } else {
+        dynamic_tool_response(
+            json!({
+                "error": format!("unknown dynamic tool `{}`", params.tool),
+                "tool": params.tool,
+            }),
+            false,
+        )
+    }
+}
+
+fn function_tool_to_dynamic_spec(tool: agent_core::FunctionToolDefinition) -> DynamicToolSpec {
+    DynamicToolSpec {
+        name: tool.id,
+        description: tool.description,
+        input_schema: tool
+            .input_schema
+            .unwrap_or_else(|| json!({"type": "object", "additionalProperties": true})),
+        defer_loading: false,
+    }
+}
+
+fn dynamic_tool_response(value: Value, success: bool) -> DynamicToolCallResponse {
+    let text = serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string());
+    DynamicToolCallResponse {
+        content_items: vec![DynamicToolCallOutputContentItem::InputText { text }],
+        success,
+    }
 }
 
 async fn handle_server_notification<R: Runtime>(

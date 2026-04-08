@@ -3,13 +3,12 @@ use serde_json::json;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Runtime, State};
 
-use crate::config;
 use crate::error::Result;
 use crate::events;
 use crate::models::{
     AssistantTurnStreamEnvelope, AttachmentRef, CancelTurnAck, ConfigSelection,
-    CreateThreadResponse, ListConfigFilesResponse, ListThreadsRequest, ListThreadsResponse,
-    ResolvedConfig, ResumeTurnStreamAck, RuntimeCatalog, StartTurnAck,
+    CreateThreadResponse, ListConfigsResponse, ListThreadsRequest, ListThreadsResponse, ResolvedConfig,
+    ResumeTurnStreamAck, RuntimeCatalog, StartTurnAck,
     SubmitRuntimeRequestAck, ThreadSnapshot,
 };
 use crate::runtime;
@@ -180,16 +179,17 @@ pub async fn submit_runtime_request<R: Runtime>(
 }
 
 #[tauri::command]
-pub fn list_config_files() -> Result<ListConfigFilesResponse> {
-    Ok(config::list_config_files())
+pub fn list_configs(state: State<'_, AssistantRuntimeState>) -> Result<ListConfigsResponse> {
+    state.list_configs()
 }
 
 #[tauri::command]
-pub fn resolve_config_profile(
-    config_file_path: String,
+pub fn resolve_config(
+    state: State<'_, AssistantRuntimeState>,
+    config_id: Option<String>,
     profile: Option<String>,
 ) -> Result<ResolvedConfig> {
-    config::resolve_config_profile(config_file_path, profile)
+    state.resolve_config_selection(Some(ConfigSelection { config_id, profile }))
 }
 
 #[tauri::command]

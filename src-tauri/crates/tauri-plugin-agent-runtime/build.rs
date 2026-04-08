@@ -6,8 +6,8 @@ const COMMANDS: &[&str] = &[
     "resume_turn_stream",
     "cancel_turn",
     "submit_runtime_request",
-    "list_config_files",
-    "resolve_config_profile",
+    "list_configs",
+    "resolve_config",
     "get_runtime_catalog",
 ];
 

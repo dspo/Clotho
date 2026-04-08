@@ -2,7 +2,7 @@ import { Channel, invoke, type InvokeArgs } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 export interface ConfigSelection {
-  configFilePath: string;
+  configId?: string | null;
   profile?: string | null;
 }
 
@@ -44,7 +44,10 @@ export interface TurnSummarySnapshot {
 }
 
 export interface ResolvedConfig {
-  configFilePath: string;
+  configId: string;
+  label: string;
+  source: string;
+  configFilePath: string | null;
   profile: string | null;
   model: string;
   provider: string;
@@ -254,21 +257,27 @@ export interface DailyAutomationRunNowAck {
   runId: string;
 }
 
-export interface ConfigFileCandidate {
-  path: string;
-  source: 'project' | 'user' | 'custom' | string;
+export interface ConfigDescriptor {
+  configId: string;
+  label: string;
+  source: string;
+  configFilePath: string | null;
   exists: boolean;
   isDefault: boolean;
 }
 
-export interface ListConfigFilesResponse {
-  items: ConfigFileCandidate[];
+export interface ListConfigsResponse {
+  items: ConfigDescriptor[];
 }
 
-export interface ResolveConfigProfileRequest {
-  configFilePath: string;
+export interface ResolveConfigRequest {
+  configId?: string | null;
   profile?: string | null;
 }
+
+export type ConfigFileCandidate = ConfigDescriptor;
+export type ListConfigFilesResponse = ListConfigsResponse;
+export type ResolveConfigProfileRequest = ResolveConfigRequest;
 
 export interface StageLocalImageResponse {
   attachment: AttachmentRef;
@@ -485,12 +494,20 @@ export class TauriAgentClient {
     return this.appCommand<StageLocalImageResponse>('assistant_stage_local_image', { ...req });
   }
 
-  listConfigFiles() {
-    return this.command<ListConfigFilesResponse>('list_config_files');
+  listConfigs() {
+    return this.command<ListConfigsResponse>('list_configs');
   }
 
-  resolveConfigProfile(req: ResolveConfigProfileRequest) {
-    return this.command<ResolvedConfig>('resolve_config_profile', { ...req });
+  listConfigFiles() {
+    return this.listConfigs();
+  }
+
+  resolveConfig(req?: ResolveConfigRequest) {
+    return this.command<ResolvedConfig>('resolve_config', req ? { ...req } : undefined);
+  }
+
+  resolveConfigProfile(req?: ResolveConfigProfileRequest) {
+    return this.resolveConfig(req);
   }
 
   getRuntimeCatalog() {

@@ -11,8 +11,8 @@ Default permissions for the reusable agent runtime plugin.
 - `allow-resume-turn-stream`
 - `allow-cancel-turn`
 - `allow-submit-runtime-request`
-- `allow-list-config-files`
-- `allow-resolve-config-profile`
+- `allow-list-configs`
+- `allow-resolve-config`
 - `allow-get-runtime-catalog`
 
 ## Permission Table
@@ -131,12 +131,12 @@ Denies the get_thread_snapshot command without any pre-configured scope.
 <tr>
 <td>
 
-`agent-runtime:allow-list-config-files`
+`agent-runtime:allow-list-configs`
 
 </td>
 <td>
 
-Enables the list_config_files command without any pre-configured scope.
+Enables the list_configs command without any pre-configured scope.
 
 </td>
 </tr>
@@ -144,12 +144,12 @@ Enables the list_config_files command without any pre-configured scope.
 <tr>
 <td>
 
-`agent-runtime:deny-list-config-files`
+`agent-runtime:deny-list-configs`
 
 </td>
 <td>
 
-Denies the list_config_files command without any pre-configured scope.
+Denies the list_configs command without any pre-configured scope.
 
 </td>
 </tr>
@@ -183,12 +183,12 @@ Denies the list_threads command without any pre-configured scope.
 <tr>
 <td>
 
-`agent-runtime:allow-resolve-config-profile`
+`agent-runtime:allow-resolve-config`
 
 </td>
 <td>
 
-Enables the resolve_config_profile command without any pre-configured scope.
+Enables the resolve_config command without any pre-configured scope.
 
 </td>
 </tr>
@@ -196,12 +196,12 @@ Enables the resolve_config_profile command without any pre-configured scope.
 <tr>
 <td>
 
-`agent-runtime:deny-resolve-config-profile`
+`agent-runtime:deny-resolve-config`
 
 </td>
 <td>
 
-Denies the resolve_config_profile command without any pre-configured scope.
+Denies the resolve_config command without any pre-configured scope.
 
 </td>
 </tr>

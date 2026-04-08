@@ -343,16 +343,16 @@
           "markdownDescription": "Denies the get_thread_snapshot command without any pre-configured scope."
         },
         {
-          "description": "Enables the list_config_files command without any pre-configured scope.",
+          "description": "Enables the list_configs command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-list-config-files",
-          "markdownDescription": "Enables the list_config_files command without any pre-configured scope."
+          "const": "allow-list-configs",
+          "markdownDescription": "Enables the list_configs command without any pre-configured scope."
         },
         {
-          "description": "Denies the list_config_files command without any pre-configured scope.",
+          "description": "Denies the list_configs command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-list-config-files",
-          "markdownDescription": "Denies the list_config_files command without any pre-configured scope."
+          "const": "deny-list-configs",
+          "markdownDescription": "Denies the list_configs command without any pre-configured scope."
         },
         {
           "description": "Enables the list_threads command without any pre-configured scope.",
@@ -367,16 +367,16 @@
           "markdownDescription": "Denies the list_threads command without any pre-configured scope."
         },
         {
-          "description": "Enables the resolve_config_profile command without any pre-configured scope.",
+          "description": "Enables the resolve_config command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-resolve-config-profile",
-          "markdownDescription": "Enables the resolve_config_profile command without any pre-configured scope."
+          "const": "allow-resolve-config",
+          "markdownDescription": "Enables the resolve_config command without any pre-configured scope."
         },
         {
-          "description": "Denies the resolve_config_profile command without any pre-configured scope.",
+          "description": "Denies the resolve_config command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-resolve-config-profile",
-          "markdownDescription": "Denies the resolve_config_profile command without any pre-configured scope."
+          "const": "deny-resolve-config",
+          "markdownDescription": "Denies the resolve_config command without any pre-configured scope."
         },
         {
           "description": "Enables the resume_turn_stream command without any pre-configured scope.",
@@ -427,10 +427,10 @@
           "markdownDescription": "Debug agent runtime permissions: operator access plus interruption for local debugging and recovery.\n"
         },
         {
-          "description": "Default permissions for the reusable agent runtime plugin.\n\n#### This default permission set includes:\n\n- `allow-list-threads`\n- `allow-get-thread-snapshot`\n- `allow-create-thread`\n- `allow-start-turn`\n- `allow-resume-turn-stream`\n- `allow-cancel-turn`\n- `allow-submit-runtime-request`\n- `allow-list-config-files`\n- `allow-resolve-config-profile`\n- `allow-get-runtime-catalog`",
+          "description": "Default permissions for the reusable agent runtime plugin.\n\n#### This default permission set includes:\n\n- `allow-list-threads`\n- `allow-get-thread-snapshot`\n- `allow-create-thread`\n- `allow-start-turn`\n- `allow-resume-turn-stream`\n- `allow-cancel-turn`\n- `allow-submit-runtime-request`\n- `allow-list-configs`\n- `allow-resolve-config`\n- `allow-get-runtime-catalog`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the reusable agent runtime plugin.\n\n#### This default permission set includes:\n\n- `allow-list-threads`\n- `allow-get-thread-snapshot`\n- `allow-create-thread`\n- `allow-start-turn`\n- `allow-resume-turn-stream`\n- `allow-cancel-turn`\n- `allow-submit-runtime-request`\n- `allow-list-config-files`\n- `allow-resolve-config-profile`\n- `allow-get-runtime-catalog`"
+          "markdownDescription": "Default permissions for the reusable agent runtime plugin.\n\n#### This default permission set includes:\n\n- `allow-list-threads`\n- `allow-get-thread-snapshot`\n- `allow-create-thread`\n- `allow-start-turn`\n- `allow-resume-turn-stream`\n- `allow-cancel-turn`\n- `allow-submit-runtime-request`\n- `allow-list-configs`\n- `allow-resolve-config`\n- `allow-get-runtime-catalog`"
         },
         {
           "description": "Operator agent runtime permissions: interactive turn lifecycle plus read-only inspection.\n",

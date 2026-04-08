@@ -49,6 +49,8 @@ pnpm add @dspo/tauri-agent-react
 node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs prompt-only ./my-agent-app
 ```
 
+如果你是直接在本仓库里跑这个脚手架，生成器会自动把 `@dspo/tauri-agent` 和 `tauri-plugin-agent-runtime` 改写成指向当前 checkout 的本地依赖，方便在发布前先做真实集成与 smoke test。
+
 未来对外发布后，可使用：
 
 ```bash
@@ -72,6 +74,10 @@ fn main() {
 }
 ```
 
+默认情况下，`init()` 会使用 framework 内置的 `DefaultConfigProvider`，它会从 `~/.codex/config.toml` 读取模型 / provider 配置。
+
+如果宿主应用希望改成项目内配置、demo 内配置，或任何自定义来源，应改用 `AgentRuntimePluginBuilder` + `init_with_builder(...)` 显式提供 `ConfigProvider`。
+
 ### Capability 示例
 
 ```json
@@ -94,7 +100,108 @@ fn main() {
 - `agent-runtime:debug`
 - `agent-runtime:default`
 
-## 3. 定义和注册 function tools
+## 3. 配置 AI Provider（ConfigProvider）
+
+`ConfigProvider` 是 runtime 的显式接入边界：
+
+1. **宿主可以自己提供**配置来源（项目内 TOML、数据库、系统设置、远程密钥服务等）
+2. **如果宿主不提供**，framework 默认回退到 `DefaultConfigProvider`
+3. 默认 provider 的行为是：读取 `~/.codex/config.toml`
+
+### 最小自定义 provider：直接指向一个 TOML 文件
+
+```rust
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use tauri_plugin_agent_runtime::{
+    init_with_builder, AgentRuntimePluginBuilder, TomlConfigProvider,
+};
+
+fn main() {
+    let config_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join(".codex")
+        .join("config.toml");
+
+    tauri::Builder::default()
+        .plugin(init_with_builder(
+            AgentRuntimePluginBuilder::new().config_provider(Arc::new(
+                TomlConfigProvider::new(
+                    "demo",
+                    "Bundled demo config",
+                    "demo",
+                    config_path,
+                )
+                .with_default(true),
+            )),
+        ))
+        .run(tauri::generate_context!())
+        .expect("failed to run tauri app");
+}
+```
+
+### `.codex/config.toml` 形状
+
+```toml
+model = "gpt-5.4"
+model_provider = "openai"
+approval_policy = "never"
+sandbox_mode = "read-only"
+
+[model_providers.openai]
+env_key = "OPENAI_API_KEY"
+wire_api = "responses"
+
+[profiles.compat]
+model = "gpt-4.1"
+model_provider = "compat"
+
+[profiles.compat.model_providers.compat]
+base_url = "https://your-openai-compatible-endpoint/v1"
+env_key = "COMPAT_API_KEY"
+wire_api = "chat_completions"
+```
+
+当前 runtime 会读取这些字段：
+
+- `model`
+- `model_provider`
+- `[model_providers.<id>]`
+- `base_url`
+- `env_key`
+- `wire_api`
+- `approval_policy`
+- `sandbox_mode`
+- `model_reasoning_effort`
+- `model_reasoning_summary`
+- `model_verbosity`
+- `personality`
+- `service_tier`
+
+### 前端如何查看当前解析结果
+
+```ts
+import { defaultTauriAgentClient } from '@dspo/tauri-agent';
+
+const config = await defaultTauriAgentClient.resolveConfig({
+  configId: 'demo',
+  profile: 'compat',
+});
+
+console.log(config.provider, config.model, config.baseUrl, config.envKey);
+```
+
+### 常见约定
+
+1. `ConfigProvider` 决定“配置从哪里来”
+2. `configId` 决定“当前选的是哪份配置”
+3. `profile` 决定“在同一份配置里叠加哪个 profile”
+4. 如果没有显式 `ConfigProvider`，就按 `~/.codex/config.toml` 走
+
+完整参考实现见 `examples/cosmic-weather/`。
+
+## 4. 定义和注册 function tools
 
 在当前实现里，`function_tools` 的接入分成两层：
 
@@ -187,7 +294,7 @@ assert_eq!(runtime.provider_count(), 1);
 
 `FunctionToolHandler` 是更细粒度的 handler trait，适合宿主在更高层再包一层 DSL 或宏；当前框架里，最直接、最稳定的执行路径仍然是 `ToolProvider`。
 
-## 4. 定义 agents、resources、actions
+## 5. 定义 agents、resources、actions
 
 TypeScript 侧推荐通过声明式 API 编排 agent / domain。
 
@@ -218,7 +325,7 @@ export const plannerAgent = defineAgent({
 });
 ```
 
-## 5. 集成 skills 与 integrations
+## 6. 集成 skills 与 integrations
 
 skills 是 authoring-time assets，不是比 tool 更高一级的 runtime primitive。推荐做法是：
 
@@ -248,7 +355,7 @@ builder
 
 这里的 `IntegrationRegistration` 表达的是接入源；例如 MCP 是 integration / tool provider transport，而不是业务动作模型本身。
 
-## 6. 创建 thread / turn / streaming
+## 7. 创建 thread / turn / streaming
 
 `@dspo/tauri-agent` 默认连接 `agent-runtime` 插件命名空间。
 
@@ -283,7 +390,7 @@ console.log(ack.turnId, snapshot.blocks.length);
 
 这些 API 的最终写入边界仍应保留在宿主应用，而不是让通用 runtime 直接越权写库。
 
-## 7. React 宿主接入
+## 8. React 宿主接入
 
 ```tsx
 import { defaultTauriAgentClient } from '@dspo/tauri-agent';
@@ -313,21 +420,29 @@ export function AgentPanel({
 
 当前 React 包故意保持最小可用：先把 transcript / proposal / audit / status hook 抽成通用能力，把产品私有壳层留给宿主自己实现。
 
-## 8. 脚手架模板
+## 9. 脚手架模板
 
 ```bash
 node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs prompt-only ./my-agent-app
 node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs declarative ./my-agent-app
 node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs operator ./my-agent-app
+node packages/create-tauri-agent-app/bin/create-tauri-agent-app.mjs cosmic-weather ./my-cosmic-app
 ```
+
+从当前仓库本地执行时，脚手架会自动注入本地 repo 依赖；将来包正式发布后，同一命令会落到发布版依赖坐标。
 
 模板差异：
 
 - `prompt-only`：只有最小 prompt agent 定义
 - `declarative`：预置 domain/resources/actions
 - `operator`：预留高权限 tool / operator workflow 的位置
+- `cosmic-weather`：完整单页 Tauri demo，包含显式 `ConfigProvider`、自定义 zodiac tool、卡片式输出 UI
 
-## 9. Codex 依赖与迁移说明
+如果你希望先看真实成品，再回头抽象成模板，仓库里还有一个同步维护的完整示例：
+
+- `examples/cosmic-weather/`
+
+## 10. Codex 依赖与迁移说明
 
 ### Codex 依赖策略
 

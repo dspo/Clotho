@@ -12,7 +12,7 @@ permissions = [
   "allow-resume-turn-stream",
   "allow-cancel-turn",
   "allow-submit-runtime-request",
-  "allow-list-config-files",
-  "allow-resolve-config-profile",
+  "allow-list-configs",
+  "allow-resolve-config",
   "allow-get-runtime-catalog",
 ]

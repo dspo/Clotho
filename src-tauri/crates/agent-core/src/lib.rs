@@ -314,6 +314,45 @@ impl AgentRuntime {
     pub fn provider_count(&self) -> usize {
         self.provider_impls.len()
     }
+
+    pub async fn list_dynamic_tools(&self, ctx: &RuntimeContext) -> Vec<FunctionToolDefinition> {
+        let mut tools = Vec::new();
+
+        for provider in &self.provider_impls {
+            for tool in provider.list_tools(ctx).await {
+                if tools.iter().any(|existing: &FunctionToolDefinition| existing.id == tool.id) {
+                    continue;
+                }
+                let registered = self.tools.iter().find(|registered| registered.id == tool.id);
+                tools.push(registered.cloned().unwrap_or(tool));
+            }
+        }
+
+        tools
+    }
+
+    pub async fn invoke_tool(
+        &self,
+        ctx: &ToolContext,
+        tool_id: &str,
+        input: Value,
+    ) -> Result<Value, AgentError> {
+        let runtime_ctx = RuntimeContext {
+            agent_id: ctx.agent_id.clone(),
+            permission: ctx.permission.clone(),
+        };
+
+        for provider in &self.provider_impls {
+            let tools = provider.list_tools(&runtime_ctx).await;
+            if tools.iter().any(|tool| tool.id == tool_id) {
+                return provider.invoke(ctx, tool_id, input).await;
+            }
+        }
+
+        Err(AgentError::MissingRegistration(format!(
+            "tool `{tool_id}` is not provided by any registered ToolProvider"
+        )))
+    }
 }
 
 pub fn builtin_permission_sets() -> [PermissionSet; 4] {
@@ -335,6 +374,37 @@ mod tests {
     impl ToolProvider for EmptyProvider {
         async fn list_tools(&self, _ctx: &RuntimeContext) -> Vec<FunctionToolDefinition> {
             Vec::new()
+        }
+    }
+
+    struct EchoProvider;
+
+    #[async_trait]
+    impl ToolProvider for EchoProvider {
+        async fn list_tools(&self, _ctx: &RuntimeContext) -> Vec<FunctionToolDefinition> {
+            vec![FunctionToolDefinition {
+                id: "echo".to_string(),
+                description: "Echo input".to_string(),
+                namespace: Some("demo".to_string()),
+                input_schema: None,
+                output_schema: None,
+                execution_mode: ExecutionMode::Immediate,
+                authz: PermissionSet::Operator,
+                visibility: Visibility::Public,
+            }]
+        }
+
+        async fn invoke(
+            &self,
+            _ctx: &ToolContext,
+            tool_id: &str,
+            input: Value,
+        ) -> Result<Value, AgentError> {
+            if tool_id != "echo" {
+                return Err(AgentError::Execution(format!("unexpected tool: {tool_id}")));
+            }
+
+            Ok(input)
         }
     }
 
@@ -438,5 +508,48 @@ mod tests {
                 PermissionSet::Debug,
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn runtime_invokes_provider_backed_tools() {
+        let mut builder = Builder::new();
+        builder
+            .register_provider(
+                ProviderRegistration {
+                    id: "echo-provider".to_string(),
+                    kind: "host".to_string(),
+                },
+                Arc::new(EchoProvider),
+            )
+            .set_config(RuntimeConfig {
+                default_permission: PermissionSet::Operator,
+                provider_adapters: vec!["codex".to_string()],
+                audit_enabled: false,
+            });
+
+        let runtime = builder.build().expect("build");
+        let tools = runtime
+            .list_dynamic_tools(&RuntimeContext {
+                agent_id: Some("demo".to_string()),
+                permission: PermissionSet::Operator,
+            })
+            .await;
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].id, "echo");
+
+        let output = runtime
+            .invoke_tool(
+                &ToolContext {
+                    agent_id: Some("demo".to_string()),
+                    thread_id: Some("thread-1".to_string()),
+                    turn_id: Some("turn-1".to_string()),
+                    permission: PermissionSet::Operator,
+                },
+                "echo",
+                serde_json::json!({ "hello": "world" }),
+            )
+            .await
+            .expect("invoke tool");
+        assert_eq!(output["hello"], "world");
     }
 }

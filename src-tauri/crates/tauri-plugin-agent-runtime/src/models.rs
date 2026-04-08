@@ -28,7 +28,7 @@ pub struct ListThreadsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigSelection {
-    pub config_file_path: String,
+    pub config_id: Option<String>,
     pub profile: Option<String>,
 }
 
@@ -127,17 +127,19 @@ pub struct SubmitRuntimeRequestAck {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ConfigFileCandidate {
-    pub path: String,
+pub struct ConfigDescriptor {
+    pub config_id: String,
+    pub label: String,
     pub source: String,
+    pub config_file_path: Option<String>,
     pub exists: bool,
     pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ListConfigFilesResponse {
-    pub items: Vec<ConfigFileCandidate>,
+pub struct ListConfigsResponse {
+    pub items: Vec<ConfigDescriptor>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -195,7 +197,10 @@ pub struct RuntimeCatalog {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolvedConfig {
-    pub config_file_path: String,
+    pub config_id: String,
+    pub label: String,
+    pub source: String,
+    pub config_file_path: Option<String>,
     pub profile: Option<String>,
     pub model: String,
     pub provider: String,
