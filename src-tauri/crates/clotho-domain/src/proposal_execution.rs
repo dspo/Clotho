@@ -41,9 +41,8 @@ pub fn apply_proposal(
     conn: &mut Connection,
     proposal: &ProposalPayload,
 ) -> Result<ProposalApplyReport, DomainError> {
-    validate_proposal(conn, proposal)?;
-
     let tx = conn.transaction()?;
+    validate_proposal(&tx, proposal)?;
     for action in &proposal.actions {
         apply_action(&tx, action)?;
     }

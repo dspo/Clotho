@@ -27,7 +27,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 
 当前现实（不要把仓库当空项目）
 - 已有 embedded Codex runtime、thread/turn/channel、native tools、proposal/apply、automation 主链。
-- tauri-plugin-agent-runtime 仍通过 clotho-adapter 承载 Clotho 侧 domain wiring（需继续收紧宿主边界）。
+- tauri-plugin-agent-runtime 仍需继续收紧宿主边界，确保 Clotho domain wiring 只留在宿主 app / domain crate。
 - native tools、proposal schema、skills、catalog 等带有 Clotho 领域耦合。
 - 前端类型安全客户端与 types 仍在 app 内部（需抽成 npm SDK）。
 - 目前只有 default 权限集，需扩展为至少 read-only/operator/automation/debug。
@@ -52,7 +52,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
   - 新 crate src-tauri/crates/agent-core（通用抽象、公共 API）。
   - 新 crate src-tauri/crates/tauri-plugin-agent-runtime（通用 Tauri plugin）。
   - 把 runtime 主链统一收敛到 src-tauri/crates/tauri-plugin-agent-runtime，并删除旧命名入口，但 Clotho app 必须可运行。
-  - 把 clotho-domain 相关逻辑从 plugin 中剥离到宿主适配层或单独 crate（例如 src-tauri/crates/clotho-adapter）。
+  - 把 clotho-domain 相关逻辑从 plugin 中剥离到宿主适配层或 app-side module。
   - 在 agent-core 中暴露公共 API（Builder、AgentDefinition、FunctionToolDefinition、FunctionToolHandler、ToolProvider、SkillCatalogRegistration、IntegrationRegistration、ActionPolicy、OutputContract、AutomationHooks 及 supporting types）。
   - 实现 permission sets（至少 read-only/operator/automation/debug）。
 
@@ -77,7 +77,7 @@ Issue: https://github.com/dspo/Clotho/issues/15
 1. 全量代码+文档审计（生成内部实施清单，仅供 agent 自用，不在此停留）。
 2. 在 src-tauri/crates/ 下创建 agent-core（核心抽象）并实现基本 API（空实现也要有测试和文档）。
 3. 创建 tauri-plugin-agent-runtime（基于 agent-core 的 Tauri 插件 skeleton），并把 runtime 主链实现整体收敛进去。
-4. 在迁移过程中，把 Clotho 专用逻辑抽到宿主适配层（clotho-adapter crate 或 app-side module），确保有 thin shim 维持兼容。
+4. 在迁移过程中，把 Clotho 专用逻辑抽到宿主适配层（app-side module / domain crate），确保有 thin shim 维持兼容。
 5. 修改 src-tauri/src/lib.rs 和 app 的 plugin 注册，使其使用新的通用 plugin；确保 Clotho 在每一步的中间状态都能恢复并通过 smoke test。
 6. 在 JS 侧改造为 pnpm workspace（packages/...），抽出 tauri-agent 与 tauri-agent-react、create-tauri-agent-app。
 7. 为 TS SDK 提供类型安全客户端（示例 API: defineAgent、defineDomain、TauriAgentClient.run/ simulate/ apply）。
@@ -110,7 +110,7 @@ API 建议（可直接作为实现参考）
   - export function defineAgent(spec: AgentSpec): AgentSpec
   - export function composeAgentTurnText(agent: Pick<AgentSpec, "soul" | "instructions">, options: { userText: string; extraInstructions?: string[] }): string
   - export function defineDomain(...): DomainSpec
-  - export class TauriAgentClient { constructor(config); run(agentId:string, input:any): Promise<any>; simulateProposal(...); applyProposal(...); listAgents(): Promise<AgentSpec[]> }
+  - export class TauriAgentClient { constructor(config); run(agentId:string, input:any): Promise<any>; listAgents(): Promise<AgentSpec[]> }
 
 验证命令（执行并修复直至通过）
 - Rust:

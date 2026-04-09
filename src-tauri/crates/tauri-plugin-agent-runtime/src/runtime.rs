@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
@@ -16,17 +17,18 @@ use codex_app_server_protocol::{
     UserInput,
 };
 use codex_arg0::Arg0DispatchPaths;
-use codex_core::config::ConfigBuilder;
+use codex_core::config::{Config, ConfigBuilder, ConfigOverrides};
 use codex_core::config_loader::{CloudRequirementsLoader, LoaderOverrides};
 use codex_feedback::CodexFeedback;
 use codex_protocol::protocol::SessionSource;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Runtime};
 use tokio::sync::{mpsc, oneshot, Mutex};
+use toml_cli::Value as TomlValue;
 
 use crate::error::{Error, Result};
 use crate::events;
-use crate::models::AttachmentRef;
+use crate::models::{AttachmentRef, ResolvedConfig};
 use crate::session::{AssistantRuntimeState, StreamDispatch};
 
 #[derive(Clone, Default)]
@@ -187,7 +189,7 @@ impl EmbeddedCodexRuntime {
             return Ok(handle);
         }
 
-        let (start_args, model, provider) = build_start_args().await?;
+        let (start_args, model, provider) = build_start_args(&state).await?;
         let client = InProcessAppServerClient::start(start_args)
             .await
             .map_err(|err| {
@@ -231,15 +233,16 @@ impl EmbeddedCodexRuntime {
     }
 }
 
-async fn build_start_args() -> Result<(InProcessClientStartArgs, Option<String>, String)> {
+async fn build_start_args(
+    state: &AssistantRuntimeState,
+) -> Result<(InProcessClientStartArgs, Option<String>, String)> {
     let cwd = std::env::current_dir()?;
-    let config = ConfigBuilder::default()
-        .fallback_cwd(Some(cwd))
-        .build()
-        .await?;
+    let resolved_config = state.resolve_config_selection(None)?;
+    let cli_overrides = request_overrides_to_cli_overrides(state.request_overrides(None)?)?;
+    let config = load_runtime_config(cwd, &resolved_config, cli_overrides).await?;
 
-    let model = config.model.clone();
-    let provider = config.model_provider_id.clone();
+    let model = (!resolved_config.model.is_empty()).then(|| resolved_config.model.clone());
+    let provider = resolved_config.provider.clone();
     let config_warnings = config
         .startup_warnings
         .iter()
@@ -271,6 +274,78 @@ async fn build_start_args() -> Result<(InProcessClientStartArgs, Option<String>,
         model,
         provider,
     ))
+}
+
+async fn load_runtime_config(
+    cwd: PathBuf,
+    resolved_config: &ResolvedConfig,
+    cli_overrides: Vec<(String, TomlValue)>,
+) -> Result<Config> {
+    if let Some(codex_home) = codex_home_from_config_path(resolved_config.config_file_path.as_deref())
+    {
+        return ConfigBuilder::default()
+            .codex_home(codex_home)
+            .cli_overrides(cli_overrides)
+            .harness_overrides(ConfigOverrides {
+                cwd: Some(cwd),
+                config_profile: resolved_config.profile.clone(),
+                ..Default::default()
+            })
+            .build()
+            .await
+            .map_err(Into::into);
+    }
+
+    Config::load_default_with_cli_overrides(cli_overrides).map_err(Into::into)
+}
+
+fn codex_home_from_config_path(config_file_path: Option<&str>) -> Option<PathBuf> {
+    let config_path = PathBuf::from(config_file_path?);
+    (config_path.file_name().and_then(|name| name.to_str()) == Some("config.toml"))
+        .then(|| config_path.parent().map(|parent| parent.to_path_buf()))
+        .flatten()
+}
+
+fn request_overrides_to_cli_overrides(
+    overrides: std::collections::HashMap<String, Value>,
+) -> Result<Vec<(String, TomlValue)>> {
+    let mut overrides = overrides.into_iter().collect::<Vec<_>>();
+    overrides.sort_by(|left, right| left.0.cmp(&right.0));
+    overrides
+        .into_iter()
+        .map(|(key, value)| Ok((key, json_to_toml(value)?)))
+        .collect()
+}
+
+fn json_to_toml(value: Value) -> Result<TomlValue> {
+    match value {
+        Value::Null => Err(Error::InvalidInput(
+            "null config overrides are not supported".to_string(),
+        )),
+        Value::Bool(value) => Ok(TomlValue::Boolean(value)),
+        Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                Ok(TomlValue::Integer(value))
+            } else if let Some(value) = value.as_f64() {
+                Ok(TomlValue::Float(value))
+            } else {
+                Err(Error::InvalidInput("invalid numeric config override".to_string()))
+            }
+        }
+        Value::String(value) => Ok(TomlValue::String(value)),
+        Value::Array(items) => items
+            .into_iter()
+            .map(json_to_toml)
+            .collect::<Result<Vec<_>>>()
+            .map(TomlValue::Array),
+        Value::Object(entries) => {
+            let mut table = toml_cli::map::Map::with_capacity(entries.len());
+            for (key, value) in entries {
+                table.insert(key, json_to_toml(value)?);
+            }
+            Ok(TomlValue::Table(table))
+        }
+    }
 }
 
 async fn ensure_runtime_thread(
@@ -1141,11 +1216,20 @@ fn tool_finished_payload(item: &ThreadItem) -> Option<Value> {
         } => Some(json!({
             "toolCallId": id,
             "toolName": "apply_patch",
-            "status": format!("{:?}", status).to_lowercase(),
+            "status": patch_apply_status_name(status),
             "summary": format!("{} file change(s)", changes.len()),
             "changes": changes,
         })),
         _ => None,
+    }
+}
+
+fn patch_apply_status_name(status: &codex_app_server_protocol::PatchApplyStatus) -> &'static str {
+    match status {
+        codex_app_server_protocol::PatchApplyStatus::InProgress => "in_progress",
+        codex_app_server_protocol::PatchApplyStatus::Completed => "completed",
+        codex_app_server_protocol::PatchApplyStatus::Failed => "failed",
+        codex_app_server_protocol::PatchApplyStatus::Declined => "declined",
     }
 }
 

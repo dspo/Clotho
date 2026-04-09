@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type {
   AssistantStatusEventEnvelope,
@@ -48,25 +48,37 @@ export function useAgentStatus<TPayload = unknown>(
   ) => Promise<() => void>,
 ) {
   const [events, setEvents] = useState<AssistantStatusEventEnvelope<TPayload>[]>([]);
+  const subscribeRef = useRef(subscribe);
+  subscribeRef.current = subscribe;
 
   useEffect(() => {
-    let active = true;
+    let disposed = false;
     let cleanup: (() => void) | undefined;
+    const subscription = subscribeRef.current((event) => {
+      if (!disposed) {
+        setEvents((current) => [...current, event]);
+      }
+    });
 
-    void subscribe((event) => {
-      if (!active) {
+    void subscription.then((unlisten) => {
+      if (disposed) {
+        unlisten();
         return;
       }
-      setEvents((current) => [...current, event]);
-    }).then((unlisten) => {
       cleanup = unlisten;
     });
 
     return () => {
-      active = false;
-      cleanup?.();
+      disposed = true;
+      if (cleanup) {
+        cleanup();
+        return;
+      }
+      void subscription.then((unlisten) => {
+        unlisten();
+      });
     };
-  }, [subscribe]);
+  }, []);
 
   return events;
 }

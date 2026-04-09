@@ -5,14 +5,12 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const template = process.argv[2] ?? 'prompt-only';
-const targetDir = path.resolve(process.argv[3] ?? `./${template}-agent-app`);
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const sourceDir = path.resolve(
-  packageRoot,
-  'templates',
-  template,
-);
+const templatesDir = path.resolve(packageRoot, 'templates');
+const availableTemplates = listTemplates(templatesDir);
+const template = resolveTemplateName(process.argv[2] ?? 'prompt-only', availableTemplates);
+const targetDir = path.resolve(process.argv[3] ?? `./${template}-agent-app`);
+const sourceDir = path.join(templatesDir, template);
 const repoRoot = path.resolve(packageRoot, '..', '..');
 const frameworkVersion = JSON.parse(
   fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
@@ -83,6 +81,35 @@ function detectLocalFramework(candidateRepoRoot) {
       ),
     )
   );
+}
+
+function listTemplates(templatesRoot) {
+  return fs
+    .readdirSync(templatesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function resolveTemplateName(templateName, availableTemplateNames) {
+  if (
+    templateName.includes('/') ||
+    templateName.includes('\\') ||
+    templateName === '.' ||
+    templateName === '..'
+  ) {
+    console.error(`Invalid template name: ${templateName}`);
+    process.exit(1);
+  }
+
+  if (!availableTemplateNames.includes(templateName)) {
+    console.error(
+      `Unknown template: ${templateName}. Available templates: ${availableTemplateNames.join(', ')}`,
+    );
+    process.exit(1);
+  }
+
+  return templateName;
 }
 
 function rewriteGeneratedApp({ targetDir, frameworkVersion, localFramework, repoRoot }) {

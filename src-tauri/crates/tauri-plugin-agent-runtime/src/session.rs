@@ -19,6 +19,9 @@ use crate::models::{
 use crate::runtime::EmbeddedCodexRuntime;
 
 const DEFAULT_THREAD_TITLE: &str = "New thread";
+const MAX_STORED_THREADS: usize = 100;
+const MAX_RUNNING_TURN_HISTORY_ITEMS: usize = 512;
+const MAX_COMPLETED_TURN_HISTORY_ITEMS: usize = 64;
 
 #[derive(Clone)]
 pub struct AssistantRuntimeState {
@@ -181,45 +184,55 @@ impl AssistantRuntimeState {
     }
 
     pub fn get_thread_snapshot(&self, thread_id: &str) -> Result<ThreadSnapshot> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
-        let thread = inner
-            .threads
-            .get(thread_id)
-            .ok_or_else(|| Error::NotFound(format!("thread `{thread_id}`")))?;
+        let (thread_id, title, blocks, active_turn, config_selection, mut pending_requests) = {
+            let inner = self.inner.lock().expect("assistant runtime state poisoned");
+            let thread = inner
+                .threads
+                .get(thread_id)
+                .ok_or_else(|| Error::NotFound(format!("thread `{thread_id}`")))?;
 
-        let config_context = thread
-            .config_context
-            .clone()
+            let active_turn = thread
+                .active_turn_id
+                .as_ref()
+                .and_then(|turn_id| thread.turns.get(turn_id))
+                .filter(|turn| turn.status == "running")
+                .map(|turn| TurnSummarySnapshot {
+                    turn_id: turn.turn_id.clone(),
+                    status: turn.status.clone(),
+                    accepted_at: turn.accepted_at.clone(),
+                    last_seq: turn.last_seq,
+                });
+
+            let pending_requests = thread
+                .turns
+                .values()
+                .flat_map(|turn| {
+                    turn.pending_requests
+                        .values()
+                        .map(|record| record.request.clone())
+                })
+                .collect::<Vec<_>>();
+
+            (
+                thread.thread_id.clone(),
+                thread.title.clone(),
+                thread.blocks.clone(),
+                active_turn,
+                thread.config_context.clone(),
+                pending_requests,
+            )
+        };
+
+        let config_context = config_selection
             .map(|selection| self.resolve_config_selection(Some(selection)))
             .transpose()?;
 
-        let active_turn = thread
-            .active_turn_id
-            .as_ref()
-            .and_then(|turn_id| thread.turns.get(turn_id))
-            .filter(|turn| turn.status == "running")
-            .map(|turn| TurnSummarySnapshot {
-                turn_id: turn.turn_id.clone(),
-                status: turn.status.clone(),
-                accepted_at: turn.accepted_at.clone(),
-                last_seq: turn.last_seq,
-            });
-
-        let mut pending_requests = thread
-            .turns
-            .values()
-            .flat_map(|turn| {
-                turn.pending_requests
-                    .values()
-                    .map(|record| record.request.clone())
-            })
-            .collect::<Vec<_>>();
         pending_requests.sort_by(|left, right| left.created_at.cmp(&right.created_at));
 
         Ok(ThreadSnapshot {
-            thread_id: thread.thread_id.clone(),
-            title: thread.title.clone(),
-            blocks: thread.blocks.clone(),
+            thread_id,
+            title,
+            blocks,
             active_turn,
             config_context,
             pending_requests,
@@ -252,6 +265,7 @@ impl AssistantRuntimeState {
                 active_turn_id: None,
             },
         );
+        prune_inactive_threads(&mut inner);
 
         CreateThreadResponse {
             thread_id,
@@ -775,6 +789,7 @@ impl AssistantRuntimeState {
 
         turn.last_seq = next_seq;
         turn.history.push(item.clone());
+        trim_turn_history(turn, MAX_RUNNING_TURN_HISTORY_ITEMS);
         let subscribers = turn.subscribers.clone();
         apply_stream_item(thread, turn_id, &item);
         thread.updated_at = item.emitted_at.clone();
@@ -1021,6 +1036,8 @@ fn apply_stream_item(thread: &mut ThreadRecord, turn_id: &str, item: &AssistantT
             complete_streaming_blocks_for_turn(&mut thread.blocks, turn_id);
             if let Some(turn) = thread.turns.get_mut(turn_id) {
                 turn.status = "completed".to_string();
+                turn.subscribers.clear();
+                trim_turn_history(turn, MAX_COMPLETED_TURN_HISTORY_ITEMS);
             }
             if thread.active_turn_id.as_deref() == Some(turn_id) {
                 thread.active_turn_id = None;
@@ -1042,6 +1059,8 @@ fn apply_stream_item(thread: &mut ThreadRecord, turn_id: &str, item: &AssistantT
             complete_streaming_blocks_for_turn(&mut thread.blocks, turn_id);
             if let Some(turn) = thread.turns.get_mut(turn_id) {
                 turn.status = "failed".to_string();
+                turn.subscribers.clear();
+                trim_turn_history(turn, MAX_COMPLETED_TURN_HISTORY_ITEMS);
             }
             if thread.active_turn_id.as_deref() == Some(turn_id) {
                 thread.active_turn_id = None;
@@ -1059,6 +1078,8 @@ fn apply_stream_item(thread: &mut ThreadRecord, turn_id: &str, item: &AssistantT
             complete_streaming_blocks_for_turn(&mut thread.blocks, turn_id);
             if let Some(turn) = thread.turns.get_mut(turn_id) {
                 turn.status = "cancelled".to_string();
+                turn.subscribers.clear();
+                trim_turn_history(turn, MAX_COMPLETED_TURN_HISTORY_ITEMS);
             }
             if thread.active_turn_id.as_deref() == Some(turn_id) {
                 thread.active_turn_id = None;
@@ -1074,6 +1095,57 @@ fn payload_string(payload: &Value, key: &str) -> Option<String> {
 
 fn payload_bool(payload: &Value, key: &str) -> Option<bool> {
     payload.get(key).and_then(Value::as_bool)
+}
+
+fn trim_turn_history(turn: &mut TurnRecord, limit: usize) {
+    let overflow = turn.history.len().saturating_sub(limit);
+    if overflow > 0 {
+        turn.history.drain(0..overflow);
+    }
+}
+
+fn prune_inactive_threads(inner: &mut AssistantRuntimeInner) {
+    let overflow = inner.threads.len().saturating_sub(MAX_STORED_THREADS);
+    if overflow == 0 {
+        return;
+    }
+
+    let mut inactive_threads = inner
+        .threads
+        .values()
+        .filter(|thread| thread.active_turn_id.is_none())
+        .map(|thread| (thread.updated_at.clone(), thread.thread_id.clone()))
+        .collect::<Vec<_>>();
+    inactive_threads.sort_by(|left, right| left.0.cmp(&right.0));
+
+    for (_, thread_id) in inactive_threads.into_iter().take(overflow) {
+        remove_thread(inner, &thread_id);
+    }
+}
+
+fn remove_thread(inner: &mut AssistantRuntimeInner, thread_id: &str) {
+    let Some(thread) = inner.threads.remove(thread_id) else {
+        return;
+    };
+
+    if let Some(runtime_thread_id) = thread.runtime_thread_id.as_ref() {
+        inner.runtime_thread_index.remove(runtime_thread_id);
+        for turn in thread.turns.values() {
+            if let Some(runtime_turn_id) = turn.runtime_turn_id.as_ref() {
+                inner
+                    .runtime_turn_index
+                    .remove(&(runtime_thread_id.clone(), runtime_turn_id.clone()));
+            }
+        }
+    }
+
+    for request_id in thread
+        .turns
+        .values()
+        .flat_map(|turn| turn.pending_requests.keys())
+    {
+        inner.pending_request_index.remove(request_id);
+    }
 }
 
 fn complete_streaming_blocks_for_turn(blocks: &mut [ConversationBlock], turn_id: &str) {

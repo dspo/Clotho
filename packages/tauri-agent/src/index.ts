@@ -187,76 +187,6 @@ export interface SubmitRuntimeRequestAck {
   requestKind: string;
 }
 
-export interface ApplyProposalRequest {
-  threadId: string;
-  turnId: string;
-  proposalId: string;
-}
-
-export interface ApplyProposalAck {
-  accepted: boolean;
-  applyRunId: string;
-}
-
-export interface ProposalSimulationAction {
-  actionId: string;
-  actionType: string;
-  targetType: string;
-  targetId: string | null;
-  title: string;
-  summary: string;
-}
-
-export interface ProposalSimulationReport {
-  proposalId: string;
-  valid: boolean;
-  actionCount: number;
-  actionTypeCounts: Record<string, number>;
-  actions: ProposalSimulationAction[];
-  notices: string[];
-}
-
-export interface DailyAutomationConfig {
-  enabled: boolean;
-  localTime: string;
-  configFilePath: string | null;
-  configProfile: string | null;
-  maxAttempts: number;
-  retryDelayMinutes: number;
-}
-
-export interface DailyAutomationRun {
-  runId: string;
-  runKey: string;
-  automationKind: string;
-  triggerKind: string;
-  runDate: string | null;
-  status: string;
-  attemptCount: number;
-  scheduledFor: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  nextRetryAt: string | null;
-  threadId: string | null;
-  turnId: string | null;
-  proposalId: string | null;
-  summary: string | null;
-  error: string | null;
-  updatedAt: string;
-}
-
-export interface DailyAutomationStatus {
-  config: DailyAutomationConfig;
-  activeRun: DailyAutomationRun | null;
-  lastCompletedRun: DailyAutomationRun | null;
-  recentRuns: DailyAutomationRun[];
-}
-
-export interface DailyAutomationRunNowAck {
-  accepted: boolean;
-  runId: string;
-}
-
 export interface ConfigDescriptor {
   configId: string;
   label: string;
@@ -278,10 +208,6 @@ export interface ResolveConfigRequest {
 export type ConfigFileCandidate = ConfigDescriptor;
 export type ListConfigFilesResponse = ListConfigsResponse;
 export type ResolveConfigProfileRequest = ResolveConfigRequest;
-
-export interface StageLocalImageResponse {
-  attachment: AttachmentRef;
-}
 
 export interface RuntimeCatalogTool {
   name: string;
@@ -524,10 +450,6 @@ export class TauriAgentClient {
     return invoke<T>(`plugin:${this.plugin}|${name}`, args);
   }
 
-  private appCommand<T>(name: string, args?: InvokeArgs) {
-    return invoke<T>(name, args);
-  }
-
   listThreads(req?: { limit?: number; cursor?: string | null }) {
     return this.command<ListThreadsResponse>('list_threads', req ? { ...req } : undefined);
   }
@@ -559,26 +481,6 @@ export class TauriAgentClient {
 
   submitRuntimeRequest(req: SubmitRuntimeRequestRequest) {
     return this.command<SubmitRuntimeRequestAck>('submit_runtime_request', { ...req });
-  }
-
-  applyProposal(req: ApplyProposalRequest) {
-    return this.appCommand<ApplyProposalAck>('assistant_apply_proposal', { ...req });
-  }
-
-  simulateProposal(req: ApplyProposalRequest) {
-    return this.appCommand<ProposalSimulationReport>('assistant_simulate_proposal', { ...req });
-  }
-
-  getDailyAutomationStatus() {
-    return this.appCommand<DailyAutomationStatus>('assistant_get_daily_automation_status');
-  }
-
-  runDailyAutomationNow() {
-    return this.appCommand<DailyAutomationRunNowAck>('assistant_run_daily_automation_now');
-  }
-
-  stageLocalImage(req: { filename: string; mimeType?: string | null; data: number[] }) {
-    return this.appCommand<StageLocalImageResponse>('assistant_stage_local_image', { ...req });
   }
 
   listConfigs() {

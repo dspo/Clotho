@@ -25,6 +25,46 @@ impl serde::Serialize for Error {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.to_string())
+        serde::Serialize::serialize(
+            &SerializedError {
+                code: self.code(),
+                message: self.to_string(),
+            },
+            serializer,
+        )
+    }
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SerializedError {
+    code: &'static str,
+    message: String,
+}
+
+impl Error {
+    fn code(&self) -> &'static str {
+        match self {
+            Error::NotFound(_) => "not_found",
+            Error::InvalidInput(_) => "invalid_input",
+            Error::Conflict(_) => "conflict",
+            Error::Runtime(_) => "runtime",
+            Error::Database(_) => "database",
+            Error::Io(_) => "io",
+            Error::Json(_) => "json",
+            Error::Toml(_) => "toml",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+
+    #[test]
+    fn serializes_error_with_code_and_message() {
+        let json = serde_json::to_value(Error::Conflict("duplicate".to_string())).unwrap();
+        assert_eq!(json["code"], "conflict");
+        assert_eq!(json["message"], "conflict: duplicate");
     }
 }

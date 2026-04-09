@@ -2,7 +2,6 @@
 name = "cosmic-weather"
 version = "0.1.0"
 description = "A Tauri demo for tauri-plugin-agent-runtime"
-authors = ["GitHub Copilot"]
 edition = "2021"
 
 [lib]

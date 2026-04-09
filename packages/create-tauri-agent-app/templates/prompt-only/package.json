@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@dspo/tauri-agent": "workspace:*"
+    "@dspo/tauri-agent": "^0.1.0"
   }
 }

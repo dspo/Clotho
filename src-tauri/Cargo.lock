@@ -1367,7 +1367,6 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
- "clotho-adapter",
  "clotho-domain",
  "rmcp 0.17.0",
  "rusqlite",
@@ -1381,13 +1380,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "uuid",
-]
-
-[[package]]
-name = "clotho-adapter"
-version = "0.1.0"
-dependencies = [
- "clotho-domain",
 ]
 
 [[package]]
@@ -10312,6 +10304,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml 0.8.2",
+ "toml 0.9.12+spec-1.1.0",
  "uuid",
 ]
 

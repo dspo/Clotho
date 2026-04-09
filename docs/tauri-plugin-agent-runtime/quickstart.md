@@ -13,7 +13,6 @@
 | --- | --- |
 | `src-tauri/crates/agent-core` | 通用抽象：`Builder`、`AgentDefinition`、`FunctionToolDefinition`、`ToolProvider`、`ActionPolicy`、`OutputContract` |
 | `src-tauri/crates/tauri-plugin-agent-runtime` | 对外统一的 Tauri plugin 入口，同时承载 runtime engine、thread/turn/stream 主链实现，插件命名空间为 `agent-runtime` |
-| `src-tauri/crates/clotho-adapter` | 让 runtime 先依赖通用 adapter，再由宿主接 Clotho domain |
 | `packages/tauri-agent` | 类型安全客户端、共享 DTO、`defineAgent` / `defineDomain` |
 | `packages/tauri-agent-react` | transcript / proposal / audit 的最小 React 组件与 hooks |
 | `packages/create-tauri-agent-app` | `prompt-only` / `declarative` / `operator` 模板 |
@@ -400,14 +399,7 @@ const snapshot = await defaultTauriAgentClient.getThreadSnapshot(thread.threadId
 console.log(ack.turnId, snapshot.blocks.length);
 ```
 
-如果宿主额外实现了治理边界，还可以继续接：
-
-- `simulateProposal(...)`
-- `applyProposal(...)`
-- `getDailyAutomationStatus()`
-- `runDailyAutomationNow()`
-
-这些 API 的最终写入边界仍应保留在宿主应用，而不是让通用 runtime 直接越权写库。
+如果宿主额外实现了 proposal / automation / 资源落盘等治理边界，建议在宿主侧单独暴露自己的 Tauri commands 或二次 SDK，而不是把这些业务命令塞回通用 `@dspo/tauri-agent`。
 
 ## 8. React 宿主接入
 
