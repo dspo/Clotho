@@ -616,6 +616,10 @@ impl AssistantRuntimeState {
 
         let local_thread_id = inner.runtime_thread_index.get(runtime_thread_id)?.clone();
         let thread = inner.threads.get_mut(&local_thread_id)?;
+        // Runtime notifications can arrive before the explicit runtime-turn binding is recorded.
+        // In that narrow window, the active running turn on the already-bound local thread is the
+        // only safe fallback candidate. If the turn has already completed or has been bound by a
+        // different runtime turn, we refuse to guess and return None.
         let local_turn_id = thread.active_turn_id.clone()?;
         let turn = thread.turns.get_mut(&local_turn_id)?;
         if turn.status != "running" || turn.runtime_turn_id.is_some() {

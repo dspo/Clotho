@@ -43,6 +43,8 @@ export interface TurnSummarySnapshot {
   lastSeq: number;
 }
 
+export type WireApi = 'responses' | 'chat_completions';
+
 export interface ResolvedConfig {
   configId: string;
   label: string;
@@ -53,7 +55,7 @@ export interface ResolvedConfig {
   provider: string;
   baseUrl: string | null;
   envKey: string | null;
-  wireApi: string;
+  wireApi: WireApi;
   approvalPolicy: string | null;
   sandboxMode: string | null;
   reasoningEffort: string | null;

@@ -697,7 +697,10 @@ async fn execute_dynamic_tool<R: Runtime>(
             .await
         {
             Ok(value) => return dynamic_tool_response(value, true),
-            Err(AgentError::MissingRegistration(_)) => {}
+            Err(AgentError::MissingRegistration(_)) => {
+                // MissingRegistration means no framework-owned provider claimed the tool for this
+                // runtime context, so we fall through to the compatibility unknown-tool response.
+            }
             Err(err) => {
                 return dynamic_tool_response(
                     json!({

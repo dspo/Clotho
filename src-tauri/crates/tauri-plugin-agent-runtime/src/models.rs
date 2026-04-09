@@ -1,6 +1,14 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum WireApi {
+    #[default]
+    Responses,
+    ChatCompletions,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ListThreadsRequest {
@@ -206,7 +214,7 @@ pub struct ResolvedConfig {
     pub provider: String,
     pub base_url: Option<String>,
     pub env_key: Option<String>,
-    pub wire_api: String,
+    pub wire_api: WireApi,
     pub approval_policy: Option<String>,
     pub sandbox_mode: Option<String>,
     pub reasoning_effort: Option<String>,

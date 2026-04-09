@@ -141,14 +141,23 @@ pub async fn cancel_turn<R: Runtime>(
     thread_id: String,
     turn_id: String,
 ) -> Result<CancelTurnAck> {
-    let accepted = runtime::interrupt_runtime_turn(
+    let accepted = match runtime::interrupt_runtime_turn(
         app.clone(),
         state.inner().clone(),
         thread_id.clone(),
         turn_id.clone(),
     )
     .await
-    .unwrap_or(false);
+    {
+        Ok(accepted) => accepted,
+        Err(err) => {
+            events::emit_debug(
+                &app,
+                format!("cancel_turn failed for {thread_id}/{turn_id}: {err}"),
+            );
+            false
+        }
+    };
 
     if accepted {
         events::emit_threads_changed(&app, "updated", Some(&thread_id));

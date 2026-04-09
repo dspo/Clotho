@@ -185,6 +185,10 @@ pub trait FunctionToolHandler: Send + Sync {
 
 #[async_trait]
 pub trait ToolProvider: Send + Sync {
+    /// Returns the tools exposed for the current runtime context.
+    ///
+    /// Providers may vary their catalog by agent, permission set, or other runtime-scoped inputs,
+    /// so the runtime cannot build a single static tool-id index at registration time.
     async fn list_tools(&self, ctx: &RuntimeContext) -> Vec<FunctionToolDefinition>;
 
     async fn invoke(

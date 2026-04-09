@@ -115,6 +115,10 @@ pub(crate) fn runtime_plugin_metadata<R: Runtime>(_app: &AppHandle<R>) -> Runtim
     RUNTIME_PLUGIN_METADATA
 }
 
+/// Starts a turn from Rust without going through the Tauri command layer.
+///
+/// This is the intended entrypoint for Rust hosts, harnesses, and tests that embed the runtime
+/// directly but still want the same thread/turn lifecycle and event wiring as the command surface.
 pub async fn start_headless_turn<R: Runtime>(
     app: AppHandle<R>,
     state: AssistantRuntimeState,

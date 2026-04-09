@@ -7,7 +7,9 @@ use serde_json::Value as JsonValue;
 use toml::Value;
 
 use crate::error::{Error, Result};
-use crate::models::{ConfigDescriptor, ConfigSelection, ListConfigsResponse, ResolvedConfig};
+use crate::models::{
+    ConfigDescriptor, ConfigSelection, ListConfigsResponse, ResolvedConfig, WireApi,
+};
 
 const DEFAULT_CONFIG_ID: &str = "default";
 
@@ -174,7 +176,8 @@ fn table_value<'a>(table: &'a toml::map::Map<String, Value>, key: &str) -> Optio
 }
 
 fn string_from_table(table: Option<&toml::map::Map<String, Value>>, key: &str) -> Option<String> {
-    table.and_then(|table| table_value(table, key))
+    table
+        .and_then(|table| table_value(table, key))
         .and_then(Value::as_str)
         .map(str::to_string)
 }
@@ -209,10 +212,7 @@ fn resolve_effective_table(
     Ok(root_table)
 }
 
-fn merge_tables(
-    base: &mut toml::map::Map<String, Value>,
-    overlay: &toml::map::Map<String, Value>,
-) {
+fn merge_tables(base: &mut toml::map::Map<String, Value>, overlay: &toml::map::Map<String, Value>) {
     for (key, overlay_value) in overlay {
         match (base.get_mut(key), overlay_value) {
             (Some(Value::Table(base_table)), Value::Table(overlay_table)) => {
@@ -258,8 +258,8 @@ fn build_resolved_config(
     effective_table: toml::map::Map<String, Value>,
 ) -> Result<ResolvedConfig> {
     let model = string_from_table(Some(&effective_table), "model").unwrap_or_default();
-    let provider =
-        string_from_table(Some(&effective_table), "model_provider").unwrap_or_else(|| "openai".to_string());
+    let provider = string_from_table(Some(&effective_table), "model_provider")
+        .unwrap_or_else(|| "openai".to_string());
     let approval_policy = string_from_table(Some(&effective_table), "approval_policy");
     let sandbox_mode = string_from_table(Some(&effective_table), "sandbox_mode");
     let reasoning_effort = string_from_table(Some(&effective_table), "model_reasoning_effort");
@@ -276,8 +276,7 @@ fn build_resolved_config(
 
     let base_url = string_from_table(provider_table, "base_url");
     let env_key = string_from_table(provider_table, "env_key");
-    let wire_api =
-        string_from_table(provider_table, "wire_api").unwrap_or_else(|| "responses".to_string());
+    let wire_api = parse_wire_api(provider_table)?;
     let provider_config = provider_table
         .map(|table| serde_json::to_value(table))
         .transpose()?;
@@ -304,11 +303,22 @@ fn build_resolved_config(
     })
 }
 
+fn parse_wire_api(provider_table: Option<&toml::map::Map<String, Value>>) -> Result<WireApi> {
+    match string_from_table(provider_table, "wire_api").as_deref() {
+        None | Some("responses") => Ok(WireApi::Responses),
+        Some("chat_completions") => Ok(WireApi::ChatCompletions),
+        Some(other) => Err(Error::InvalidInput(format!(
+            "unsupported wire_api `{other}`; expected `responses` or `chat_completions`"
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
     use super::{ConfigProvider, ConfigSelection, DefaultConfigProvider};
+    use crate::models::WireApi;
     use uuid::Uuid;
 
     fn write_temp_config(contents: &str) -> PathBuf {
@@ -369,13 +379,15 @@ wire_api = "chat_completions"
         assert_eq!(resolved.model, "gpt-4.1");
         assert_eq!(resolved.base_url.as_deref(), Some("https://example.com/v1"));
         assert_eq!(resolved.env_key.as_deref(), Some("COMPAT_API_KEY"));
-        assert_eq!(resolved.wire_api, "chat_completions");
+        assert_eq!(resolved.wire_api, WireApi::ChatCompletions);
 
         let overrides = provider
             .request_overrides(Some(&selection))
             .expect("request overrides");
         assert_eq!(
-            overrides.get("model_provider").and_then(|value| value.as_str()),
+            overrides
+                .get("model_provider")
+                .and_then(|value| value.as_str()),
             Some("compat")
         );
         assert_eq!(
@@ -399,5 +411,26 @@ wire_api = "chat_completions"
             .resolve_config(Some(&selection))
             .expect_err("unknown config id must fail");
         assert!(err.to_string().contains("config `demo`"));
+    }
+
+    #[test]
+    fn default_provider_rejects_unknown_wire_api_values() {
+        let path = write_temp_config(
+            r#"
+model = "gpt-5.4"
+model_provider = "openai"
+
+[model_providers.openai]
+wire_api = "legacy"
+"#,
+        );
+        let provider = DefaultConfigProvider::from_path(path);
+
+        let err = provider
+            .resolve_config(None)
+            .expect_err("invalid wire_api must fail");
+        assert!(err
+            .to_string()
+            .contains("unsupported wire_api `legacy`; expected `responses` or `chat_completions`"));
     }
 }
