@@ -105,11 +105,42 @@ pub enum OutputContract {
     Proposal,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SoulDefinition {
+    pub markdown: String,
+    pub source: Option<String>,
+    pub summary: Option<String>,
+}
+
+impl SoulDefinition {
+    pub fn inline(markdown: impl Into<String>) -> Self {
+        Self {
+            markdown: markdown.into(),
+            source: None,
+            summary: None,
+        }
+    }
+
+    pub fn sourced(source: impl Into<String>, markdown: impl Into<String>) -> Self {
+        Self {
+            markdown: markdown.into(),
+            source: Some(source.into()),
+            summary: None,
+        }
+    }
+
+    pub fn with_summary(mut self, summary: impl Into<String>) -> Self {
+        self.summary = Some(summary.into());
+        self
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AgentDefinition {
     pub id: String,
     pub name: Option<String>,
     pub description: Option<String>,
+    pub soul: Option<SoulDefinition>,
     pub instructions: Option<String>,
     pub model_profile: Option<ModelProfile>,
     pub tool_bindings: Vec<ToolBinding>,
@@ -413,6 +444,13 @@ mod tests {
             id: "planner".to_string(),
             name: Some("Planner".to_string()),
             description: Some("Plans work".to_string()),
+            soul: Some(
+                SoulDefinition::sourced(
+                    "SOUL.MD",
+                    "# Planner\n\nStay focused on task planning and proposal drafting.",
+                )
+                .with_summary("Planner scope and refusal boundary"),
+            ),
             instructions: Some("help".to_string()),
             model_profile: Some(ModelProfile {
                 provider: "openai".to_string(),
@@ -489,6 +527,10 @@ mod tests {
 
         let runtime = builder.build().expect("build");
         assert_eq!(runtime.list_agents().len(), 1);
+        assert_eq!(
+            runtime.list_agents()[0].soul.as_ref().and_then(|soul| soul.source.as_deref()),
+            Some("SOUL.MD")
+        );
         assert_eq!(runtime.list_tools().len(), 1);
         assert_eq!(runtime.list_provider_registrations().len(), 1);
         assert_eq!(runtime.list_skill_catalogs().len(), 1);

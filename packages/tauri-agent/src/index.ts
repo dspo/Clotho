@@ -374,10 +374,17 @@ export interface ResourceBindingSpec {
   required?: boolean;
 }
 
+export interface SoulSpec {
+  markdown: string;
+  source?: string;
+  summary?: string;
+}
+
 export interface AgentSpec {
   id: string;
   name?: string;
   description?: string;
+  soul?: SoulSpec | null;
   instructions?: string;
   modelProfile?: Record<string, unknown> | null;
   toolBindings?: ToolBindingSpec[];
@@ -398,12 +405,92 @@ export interface DomainSpec {
 
 export const builtinPermissionSets = ['read-only', 'operator', 'automation', 'debug'] as const;
 
+export function defineSoul<T extends SoulSpec>(spec: T): T {
+  return spec;
+}
+
 export function defineAgent<T extends AgentSpec>(spec: T): T {
   return spec;
 }
 
 export function defineDomain<T extends DomainSpec>(spec: T): T {
   return spec;
+}
+
+export interface ComposeAgentTurnTextOptions {
+  userText: string;
+  extraInstructions?: string[];
+}
+
+function normalizeMultilineText(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function buildPromptSection(title: string, body: string): string {
+  return `# ${title}\n${body}`;
+}
+
+export function composeAgentTurnText(
+  agent: Pick<AgentSpec, 'soul' | 'instructions'>,
+  options: ComposeAgentTurnTextOptions,
+): string {
+  const sections: string[] = [];
+  const soulMarkdown = normalizeMultilineText(agent.soul?.markdown);
+
+  if (soulMarkdown) {
+    const soulPreamble: string[] = [];
+    const soulSource = normalizeMultilineText(agent.soul?.source);
+    const soulSummary = normalizeMultilineText(agent.soul?.summary);
+
+    if (soulSource) {
+      soulPreamble.push(`Source: ${soulSource}`);
+    }
+
+    if (soulSummary) {
+      soulPreamble.push(`Summary: ${soulSummary}`);
+    }
+
+    const soulBody = soulPreamble.length > 0
+      ? `${soulPreamble.join('\n')}\n\n${soulMarkdown}`
+      : soulMarkdown;
+    sections.push(buildPromptSection('SOUL.MD', soulBody));
+    sections.push(
+      buildPromptSection(
+        'Boundary reminder',
+        [
+          'Stay within the role, scope, tool, and refusal boundaries declared in SOUL.MD.',
+          'If the user asks for anything outside that scope, decline briefly and redirect to the supported capability.',
+        ].join('\n'),
+      ),
+    );
+  }
+
+  const instructions = normalizeMultilineText(agent.instructions);
+  if (instructions) {
+    sections.push(buildPromptSection('Agent instructions', instructions));
+  }
+
+  sections.push(buildPromptSection('User request', options.userText.trim()));
+
+  const extraInstructions =
+    options.extraInstructions
+      ?.map((instruction) => normalizeMultilineText(instruction))
+      .filter((instruction): instruction is string => instruction !== null) ?? [];
+  if (extraInstructions.length > 0) {
+    sections.push(
+      buildPromptSection(
+        'Runtime reminders',
+        extraInstructions.map((instruction) => `- ${instruction}`).join('\n'),
+      ),
+    );
+  }
+
+  return sections.join('\n\n');
 }
 
 export interface TauriAgentClientOptions {

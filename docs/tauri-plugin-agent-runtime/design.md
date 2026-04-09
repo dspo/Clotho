@@ -96,7 +96,7 @@ API 建议（可直接作为实现参考）
   - pub struct Builder { /* register_agent, register_tool, register_provider, set_config */ }
   - pub trait ConfigProvider { fn list_configs(&self) -> Result<ListConfigsResponse>; fn resolve_config(&self, selection: Option<&ConfigSelection>) -> Result<ResolvedConfig>; fn request_overrides(&self, selection: Option<&ConfigSelection>) -> Result<HashMap<String, serde_json::Value>>; }
   - pub struct AgentRuntimePluginBuilder { /* config_provider(...), agent_runtime(...), include_builtin_native_tools(...)/disable_builtin_native_tools()/enable_builtin_native_tools() */ }
-  - pub struct AgentDefinition { id: String, name: Option<String>, instructions: Option<String>, model_profile: Option<ModelProfile>, tool_bindings: Vec<ToolBinding>, skill_bindings: Vec<SkillBinding>, action_policy: ActionPolicy, output_contract: OutputContract, automation_hooks: AutomationHooks, ui_metadata: UiMetadata }
+  - pub struct AgentDefinition { id: String, name: Option<String>, description: Option<String>, soul: Option<SoulDefinition>, instructions: Option<String>, model_profile: Option<ModelProfile>, tool_bindings: Vec<ToolBinding>, skill_bindings: Vec<SkillBinding>, resource_bindings: Vec<ResourceBinding>, action_policy: ActionPolicy, output_contract: OutputContract, automation_hooks: AutomationHooks, ui_metadata: UiMetadata }
   - pub struct FunctionToolDefinition { id: String, description: String, namespace: Option<String>, input_schema: Option<serde_json::Value>, output_schema: Option<serde_json::Value>, execution_mode: ExecutionMode, authz: PermissionSet, visibility: Visibility }
   - pub trait FunctionToolHandler { fn handle(&self, ctx: &ToolContext, input: serde_json::Value) -> Result<serde_json::Value, ToolError>; }
   - pub trait ToolProvider { fn list_tools(&self, ctx: &Context) -> Vec<FunctionToolDefinition>; fn invoke(&self, id: &str, input: serde_json::Value) -> Result<serde_json::Value, ToolError>; }
@@ -104,8 +104,11 @@ API 建议（可直接作为实现参考）
   - pub enum OutputContract { FreeformText, StructuredArtifact { schema: serde_json::Value }, Proposal }
 
 - TypeScript (示例 API)：
-  - type AgentSpec = { id: string; name?: string; description?: string; instructions?: string; modelProfile?: any; toolBindings?: any[]; actionPolicy?: ActionPolicy; outputContract?: OutputContract; automationHooks?: any; }
+  - type SoulSpec = { markdown: string; source?: string; summary?: string }
+  - type AgentSpec = { id: string; name?: string; description?: string; soul?: SoulSpec; instructions?: string; modelProfile?: any; toolBindings?: any[]; resourceBindings?: any[]; actionPolicy?: ActionPolicy; outputContract?: OutputContract; automationHooks?: any; }
+  - export function defineSoul(spec: SoulSpec): SoulSpec
   - export function defineAgent(spec: AgentSpec): AgentSpec
+  - export function composeAgentTurnText(agent: Pick<AgentSpec, "soul" | "instructions">, options: { userText: string; extraInstructions?: string[] }): string
   - export function defineDomain(...): DomainSpec
   - export class TauriAgentClient { constructor(config); run(agentId:string, input:any): Promise<any>; simulateProposal(...); applyProposal(...); listAgents(): Promise<AgentSpec[]> }
 

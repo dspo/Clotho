@@ -293,8 +293,10 @@ TypeScript 侧推荐通过声明式 API 编排 agent / domain。
 ```ts
 import {
   builtinPermissionSets,
+  composeAgentTurnText,
   defineAgent,
   defineDomain,
+  defineSoul,
 } from '@dspo/tauri-agent';
 
 export const planningDomain = defineDomain({
@@ -304,10 +306,28 @@ export const planningDomain = defineDomain({
   tools: [{ toolId: 'workspace.list_files', permission: builtinPermissionSets[0] }],
 });
 
+export const plannerSoul = defineSoul({
+  source: 'SOUL.MD',
+  summary: '限制 agent 只做任务规划与提案生成。',
+  markdown: `
+# Planner Soul
+
+## Scope
+- 帮助用户整理任务上下文
+- 生成可审计、可应用的规划提案
+
+## Boundaries
+- 不处理与规划无关的泛用聊天
+- 不给出医疗、法律、金融等高风险建议
+- 如果用户要求越界能力，简短拒绝并引导回规划场景
+  `.trim(),
+});
+
 export const plannerAgent = defineAgent({
   id: 'planner',
   name: 'Planner',
   description: '生成任务规划与提案。',
+  soul: plannerSoul,
   instructions: '优先给出安全、可审计、可应用的计划。',
   toolBindings: [{ toolId: 'workspace.list_files', permission: builtinPermissionSets[0] }],
   skillBindings: [{ skillId: 'planning/default' }],
@@ -315,7 +335,14 @@ export const plannerAgent = defineAgent({
   actionPolicy: 'proposal-only',
   outputContract: 'proposal',
 });
+
+const turnText = composeAgentTurnText(plannerAgent, {
+  userText: '请根据本周任务生成今日计划提案。',
+  extraInstructions: ['优先输出可执行的 proposal，不要直接写入业务数据库。'],
+});
 ```
+
+推荐把 agent 的“灵魂与边界”放在独立的 `SOUL.MD` 中，再通过 `defineSoul(...)` 接入；运行时发送 turn 时使用 `composeAgentTurnText(...)` 统一把 `SOUL.MD`、开发者 instructions 和用户输入拼成最终 prompt，避免宿主每个页面手写一套 prompt 模板，导致边界逐渐漂移。
 
 ## 6. 集成 skills 与 integrations
 

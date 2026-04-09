@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { ConfigSelection, ConversationBlock, ResolvedConfig } from '@dspo/tauri-agent';
-import { defaultTauriAgentClient } from '@dspo/tauri-agent';
+import { composeAgentTurnText, defaultTauriAgentClient } from '@dspo/tauri-agent';
 
 import {
   COSMIC_TOOL_ID,
@@ -145,7 +145,10 @@ function statusLabel(status: string): string {
 }
 
 function composeTurnPrompt(input: string): string {
-  return `${cosmicWeatherAgent.instructions ?? ''}\n\nUser request:\n${input.trim()}\n\nRemember: the only host tool you can call is ${COSMIC_TOOL_ID}.`;
+  return composeAgentTurnText(cosmicWeatherAgent, {
+    userText: input.trim(),
+    extraInstructions: [`The only host tool you can call is ${COSMIC_TOOL_ID}.`],
+  });
 }
 
 function blockTitle(block: ConversationBlock): string {

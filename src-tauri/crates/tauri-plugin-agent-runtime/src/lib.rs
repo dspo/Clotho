@@ -30,7 +30,7 @@ pub use agent_core::{
     Builder, ExecutionMode, FunctionToolDefinition, FunctionToolHandler, IntegrationRegistration,
     ModelProfile, OutputContract, PermissionSet, ProviderRegistration, ResourceBinding,
     RuntimeConfig, RuntimeContext, SkillBinding, SkillCatalogRegistration, ToolBinding,
-    ToolContext, ToolProvider, UiMetadata, Visibility,
+    ToolContext, ToolProvider, UiMetadata, Visibility, SoulDefinition,
 };
 pub use config::{ConfigProvider, DefaultConfigProvider, TomlConfigProvider};
 pub use error::{Error, Result};

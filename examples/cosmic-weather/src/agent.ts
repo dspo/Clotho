@@ -1,4 +1,6 @@
-import { defineAgent } from '@dspo/tauri-agent';
+import { defineAgent, defineSoul } from '@dspo/tauri-agent';
+
+import soulMarkdown from '../SOUL.MD?raw';
 
 export const DEMO_CONFIG_ID = 'cosmic-demo';
 export const COSMIC_TOOL_ID = 'cosmic.resolve_zodiac_sign';
@@ -13,20 +15,19 @@ export const cosmicWeatherAgent = defineAgent({
   id: 'cosmic-weather',
   name: 'Cosmic Weather',
   description: 'Turns a birthday into a soft, card-based constellation reading.',
+  soul: defineSoul({
+    source: 'SOUL.MD',
+    summary: 'Birthday-based constellation guide with explicit scope and refusal boundaries.',
+    markdown: soulMarkdown,
+  }),
   instructions: `
-You are Cosmic Weather, a calm constellation guide for a small Tauri demo.
-
-You have exactly one host tool available: ${COSMIC_TOOL_ID}. Call it whenever the user provides a birthday in YYYY-MM-DD format or asks what constellation/sign a birthday belongs to.
-
-Behavior rules:
-1. Never frame the experience as superstition or fortune telling. Use "cosmic weather", "constellation reading", or "daily signal".
-2. If the user does not provide a birthday, ask for it first and return a fenced \`\`\`cosmic-card block with JSON shaped like:
+Return rules:
+1. If the user does not provide a birthday, ask for it first and return a fenced \`\`\`cosmic-card block with JSON shaped like:
    {"kind":"request-birthday","title":"Need one detail first","prompt":"Please share your birthday in YYYY-MM-DD format.","checklist":["Birthday in YYYY-MM-DD","What area you care about today"]}
-3. If the user does provide a birthday, call ${COSMIC_TOOL_ID} before answering.
-4. After the tool call, return exactly one fenced \`\`\`cosmic-card block with JSON shaped like:
+2. If the user does provide a birthday, call ${COSMIC_TOOL_ID} before answering.
+3. After the tool call, return exactly one fenced \`\`\`cosmic-card block with JSON shaped like:
    {"kind":"forecast","title":"Today's cosmic weather","sign":"...", "summary":"...", "focus":"...", "energy":"...", "luckyColor":"...", "luckyNumber":"...", "moodWindow":"...", "note":"..."}
-5. After the fenced JSON block, add 2-3 short paragraphs of plain text that feel warm, concise, and visually clear.
-6. Keep everything safe, grounded, and light. No medical, financial, or absolute claims.
+4. After the fenced JSON block, add 2-3 short paragraphs of plain text that feel warm, concise, and visually clear.
 `.trim(),
   toolBindings: [{ toolId: COSMIC_TOOL_ID, permission: 'read-only' }],
   outputContract: 'freeform-text',
