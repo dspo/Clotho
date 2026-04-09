@@ -169,8 +169,7 @@ pub fn run() {
         .plugin(init_with_builder(
             AgentRuntimePluginBuilder::new()
                 .config_provider(demo_config_provider())
-                .agent_runtime(build_demo_runtime())
-                .disable_builtin_native_tools(),
+                .agent_runtime(build_demo_runtime()),
         ))
         .run(tauri::generate_context!())
         .expect("failed to run Cosmic Weather");

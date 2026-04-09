@@ -57,7 +57,7 @@ impl AgentRuntimePluginBuilder {
         Self {
             config_provider: None,
             agent_runtime: None,
-            include_builtin_native_tools: true,
+            include_builtin_native_tools: false,
         }
     }
 
@@ -78,6 +78,11 @@ impl AgentRuntimePluginBuilder {
 
     pub fn disable_builtin_native_tools(mut self) -> Self {
         self.include_builtin_native_tools = false;
+        self
+    }
+
+    pub fn enable_builtin_native_tools(mut self) -> Self {
+        self.include_builtin_native_tools = true;
         self
     }
 
@@ -230,6 +235,12 @@ mod tests {
     #[test]
     fn agent_runtime_metadata_uses_agent_namespace() {
         assert_eq!(PLUGIN_NAME, "agent-runtime");
+        assert!(!AgentRuntimePluginBuilder::new().include_builtin_native_tools);
+        assert!(
+            AgentRuntimePluginBuilder::new()
+                .enable_builtin_native_tools()
+                .include_builtin_native_tools
+        );
         assert_eq!(
             RUNTIME_PLUGIN_METADATA.status_event,
             "agent-runtime://status"
@@ -243,6 +254,6 @@ mod tests {
         let _ = Builder::new();
         let _ = AgentRuntimePluginBuilder::new()
             .config_provider(Arc::new(DefaultConfigProvider::default()))
-            .disable_builtin_native_tools();
+            .enable_builtin_native_tools();
     }
 }

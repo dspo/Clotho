@@ -12,7 +12,7 @@ tauri-plugin-agent-runtime = { git = "https://github.com/dspo/Clotho.git" }
 ## 它暴露什么
 
 - `init()`：注册 `agent-runtime` plugin
-- `init_with_builder(...)` / `AgentRuntimePluginBuilder`：向宿主注入 `ConfigProvider`、`AgentRuntime` 注册表，以及是否保留内建 tools
+- `init_with_builder(...)` / `AgentRuntimePluginBuilder`：向宿主注入 `ConfigProvider`、`AgentRuntime` 注册表，并按需显式启用内建 tools
 - 从 `agent-core` 重新导出的公共抽象
 - 与 thread / turn / stream / catalog 相关的共享 runtime 类型
 - `ConfigProvider`、`DefaultConfigProvider`、`TomlConfigProvider`
@@ -31,7 +31,7 @@ fn main() {
 }
 ```
 
-`init()` 默认会使用 `DefaultConfigProvider`，也就是读取 `~/.codex/config.toml`。
+`init()` 默认会使用 `DefaultConfigProvider`，也就是读取 `~/.codex/config.toml`。内建 native tools 默认**不启用**；如果宿主希望接入框架内置的 Clotho native tools，需要显式调用 `.enable_builtin_native_tools()`。
 
 如果宿主想改为项目内 / app 内配置来源，可以切换到：
 

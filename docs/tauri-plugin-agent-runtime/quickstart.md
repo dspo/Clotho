@@ -76,6 +76,8 @@ fn main() {
 
 默认情况下，`init()` 会使用 framework 内置的 `DefaultConfigProvider`，它会从 `~/.codex/config.toml` 读取模型 / provider 配置。
 
+另外，framework 内建的 native tools 默认**关闭**；只有宿主显式调用 `.enable_builtin_native_tools()` 时，才会把这一组 Clotho 内置 tools 暴露给 runtime。
+
 如果宿主应用希望改成项目内配置、demo 内配置，或任何自定义来源，应改用 `AgentRuntimePluginBuilder` + `init_with_builder(...)` 显式提供 `ConfigProvider`。
 
 ### Capability 示例
