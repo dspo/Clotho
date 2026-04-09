@@ -255,37 +255,37 @@ impl Builder {
         }
     }
 
-    pub fn register_agent(&mut self, def: AgentDefinition) -> &mut Self {
+    pub fn register_agent(mut self, def: AgentDefinition) -> Self {
         self.agents.push(def);
         self
     }
 
-    pub fn register_tool(&mut self, tool: FunctionToolDefinition) -> &mut Self {
+    pub fn register_tool(mut self, tool: FunctionToolDefinition) -> Self {
         self.tools.push(tool);
         self
     }
 
     pub fn register_provider(
-        &mut self,
+        mut self,
         registration: ProviderRegistration,
         provider: Arc<dyn ToolProvider>,
-    ) -> &mut Self {
+    ) -> Self {
         self.providers.push(registration);
         self.provider_impls.push(provider);
         self
     }
 
-    pub fn register_skill_catalog(&mut self, registration: SkillCatalogRegistration) -> &mut Self {
+    pub fn register_skill_catalog(mut self, registration: SkillCatalogRegistration) -> Self {
         self.skill_catalogs.push(registration);
         self
     }
 
-    pub fn register_integration(&mut self, registration: IntegrationRegistration) -> &mut Self {
+    pub fn register_integration(mut self, registration: IntegrationRegistration) -> Self {
         self.integrations.push(registration);
         self
     }
 
-    pub fn set_config(&mut self, config: RuntimeConfig) -> &mut Self {
+    pub fn set_config(mut self, config: RuntimeConfig) -> Self {
         self.config = Some(config);
         self
     }
@@ -351,10 +351,16 @@ impl AgentRuntime {
 
         for provider in &self.provider_impls {
             for tool in provider.list_tools(ctx).await {
-                if tools.iter().any(|existing: &FunctionToolDefinition| existing.id == tool.id) {
+                if tools
+                    .iter()
+                    .any(|existing: &FunctionToolDefinition| existing.id == tool.id)
+                {
                     continue;
                 }
-                let registered = self.tools.iter().find(|registered| registered.id == tool.id);
+                let registered = self
+                    .tools
+                    .iter()
+                    .find(|registered| registered.id == tool.id);
                 tools.push(registered.cloned().unwrap_or(tool));
             }
         }
@@ -498,8 +504,7 @@ mod tests {
 
     #[tokio::test]
     async fn builder_registers_framework_artifacts() {
-        let mut builder = Builder::new();
-        builder
+        let runtime = Builder::new()
             .register_agent(sample_agent())
             .register_tool(sample_tool())
             .register_skill_catalog(SkillCatalogRegistration {
@@ -523,12 +528,15 @@ mod tests {
                 default_permission: PermissionSet::Operator,
                 provider_adapters: vec!["openai".to_string()],
                 audit_enabled: true,
-            });
-
-        let runtime = builder.build().expect("build");
+            })
+            .build()
+            .expect("build");
         assert_eq!(runtime.list_agents().len(), 1);
         assert_eq!(
-            runtime.list_agents()[0].soul.as_ref().and_then(|soul| soul.source.as_deref()),
+            runtime.list_agents()[0]
+                .soul
+                .as_ref()
+                .and_then(|soul| soul.source.as_deref()),
             Some("SOUL.MD")
         );
         assert_eq!(runtime.list_tools().len(), 1);
@@ -554,8 +562,7 @@ mod tests {
 
     #[tokio::test]
     async fn runtime_invokes_provider_backed_tools() {
-        let mut builder = Builder::new();
-        builder
+        let runtime = Builder::new()
             .register_provider(
                 ProviderRegistration {
                     id: "echo-provider".to_string(),
@@ -567,9 +574,9 @@ mod tests {
                 default_permission: PermissionSet::Operator,
                 provider_adapters: vec!["codex".to_string()],
                 audit_enabled: false,
-            });
-
-        let runtime = builder.build().expect("build");
+            })
+            .build()
+            .expect("build");
         let tools = runtime
             .list_dynamic_tools(&RuntimeContext {
                 agent_id: Some("demo".to_string()),

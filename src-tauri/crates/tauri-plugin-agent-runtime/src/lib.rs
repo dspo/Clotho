@@ -126,10 +126,12 @@ pub async fn start_headless_turn<R: Runtime>(
     config_context: Option<ConfigSelection>,
 ) -> Result<StartTurnAck> {
     let attachments = attachments.unwrap_or_default();
-    let started = state.start_background_turn(&thread_id, &text, config_context.clone())?;
+    let started = state
+        .start_background_turn(&thread_id, &text, config_context.clone())
+        .await?;
     let turn_id = started.turn_id.clone();
     let accepted_at = started.accepted_at.clone();
-    let resolved_config_context = state.thread_config_selection(&thread_id)?;
+    let resolved_config_context = state.thread_config_selection(&thread_id).await?;
 
     match runtime::start_runtime_turn(
         app.clone(),
@@ -153,16 +155,18 @@ pub async fn start_headless_turn<R: Runtime>(
             })
         }
         Err(err) => {
-            let StreamDispatch { item, subscribers } = state.push_stream_event(
-                &thread_id,
-                &turn_id,
-                "plugin",
-                "turn_failed",
-                json!({
-                    "code": "runtime_start_failed",
-                    "message": err.to_string(),
-                }),
-            )?;
+            let StreamDispatch { item, subscribers } = state
+                .push_stream_event(
+                    &thread_id,
+                    &turn_id,
+                    "plugin",
+                    "turn_failed",
+                    json!({
+                        "code": "runtime_start_failed",
+                        "message": err.to_string(),
+                    }),
+                )
+                .await?;
             for subscriber in subscribers {
                 let _ = subscriber.send(item.clone());
             }

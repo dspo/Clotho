@@ -19,8 +19,9 @@ impl ToolProvider for CosmicWeatherToolProvider {
     async fn list_tools(&self, _ctx: &RuntimeContext) -> Vec<FunctionToolDefinition> {
         vec![FunctionToolDefinition {
             id: COSMIC_TOOL_ID.to_string(),
-            description: "Resolve a YYYY-MM-DD birthday into a zodiac sign, date range, and element."
-                .to_string(),
+            description:
+                "Resolve a YYYY-MM-DD birthday into a zodiac sign, date range, and element."
+                    .to_string(),
             namespace: Some("cosmic".to_string()),
             input_schema: Some(json!({
                 "type": "object",
@@ -103,7 +104,10 @@ fn parse_month_day(birthday: &str) -> Result<(u32, u32), AgentError> {
     Ok((month, day))
 }
 
-fn zodiac_for_date(month: u32, day: u32) -> Result<(&'static str, &'static str, &'static str), AgentError> {
+fn zodiac_for_date(
+    month: u32,
+    day: u32,
+) -> Result<(&'static str, &'static str, &'static str), AgentError> {
     let sign = match (month, day) {
         (1, 20..=31) | (2, 1..=18) => ("Aquarius", "Jan 20 - Feb 18", "Air"),
         (2, 19..=29) | (3, 1..=20) => ("Pisces", "Feb 19 - Mar 20", "Water"),
@@ -145,8 +149,7 @@ fn demo_config_provider() -> Arc<dyn ConfigProvider> {
 }
 
 fn build_demo_runtime() -> AgentRuntime {
-    let mut builder = Builder::new();
-    builder
+    Builder::new()
         .register_provider(
             ProviderRegistration {
                 id: "cosmic-weather-tools".to_string(),
@@ -158,9 +161,9 @@ fn build_demo_runtime() -> AgentRuntime {
             default_permission: PermissionSet::ReadOnly,
             provider_adapters: vec!["codex".to_string()],
             audit_enabled: true,
-        });
-
-    builder.build().expect("failed to build Cosmic Weather runtime")
+        })
+        .build()
+        .expect("failed to build Cosmic Weather runtime")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

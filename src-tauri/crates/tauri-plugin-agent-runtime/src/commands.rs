@@ -15,30 +15,32 @@ use crate::runtime;
 use crate::session::{AssistantRuntimeState, StreamDispatch};
 
 #[tauri::command]
-pub fn list_threads(
+pub async fn list_threads(
     state: State<'_, AssistantRuntimeState>,
     limit: Option<usize>,
     cursor: Option<String>,
 ) -> Result<ListThreadsResponse> {
-    Ok(state.list_threads(ListThreadsRequest { limit, cursor }))
+    Ok(state
+        .list_threads(ListThreadsRequest { limit, cursor })
+        .await)
 }
 
 #[tauri::command]
-pub fn get_thread_snapshot(
+pub async fn get_thread_snapshot(
     state: State<'_, AssistantRuntimeState>,
     thread_id: String,
 ) -> Result<ThreadSnapshot> {
-    state.get_thread_snapshot(&thread_id)
+    state.get_thread_snapshot(&thread_id).await
 }
 
 #[tauri::command]
-pub fn create_thread<R: Runtime>(
+pub async fn create_thread<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AssistantRuntimeState>,
     title: Option<String>,
     config_context: Option<ConfigSelection>,
 ) -> Result<CreateThreadResponse> {
-    let response = state.create_thread(title, config_context);
+    let response = state.create_thread(title, config_context).await;
     events::emit_threads_changed(&app, "created", Some(&response.thread_id));
     Ok(response)
 }
@@ -57,10 +59,12 @@ pub async fn start_turn<R: Runtime>(
 ) -> Result<StartTurnAck> {
     let attachments = attachments.unwrap_or_default();
     let runtime_state = state.inner().clone();
-    let started = runtime_state.start_turn(&thread_id, &text, config_context.clone(), on_event)?;
+    let started = runtime_state
+        .start_turn(&thread_id, &text, config_context.clone(), on_event)
+        .await?;
     let turn_id = started.turn_id.clone();
     let accepted_at = started.accepted_at.clone();
-    let resolved_config_context = runtime_state.thread_config_selection(&thread_id)?;
+    let resolved_config_context = runtime_state.thread_config_selection(&thread_id).await?;
 
     match runtime::start_runtime_turn(
         app.clone(),
@@ -84,16 +88,18 @@ pub async fn start_turn<R: Runtime>(
             })
         }
         Err(err) => {
-            let StreamDispatch { item, subscribers } = runtime_state.push_stream_event(
-                &thread_id,
-                &turn_id,
-                "plugin",
-                "turn_failed",
-                json!({
-                    "code": "runtime_start_failed",
-                    "message": err.to_string(),
-                }),
-            )?;
+            let StreamDispatch { item, subscribers } = runtime_state
+                .push_stream_event(
+                    &thread_id,
+                    &turn_id,
+                    "plugin",
+                    "turn_failed",
+                    json!({
+                        "code": "runtime_start_failed",
+                        "message": err.to_string(),
+                    }),
+                )
+                .await?;
             for subscriber in subscribers {
                 let _ = subscriber.send(item.clone());
             }
@@ -104,7 +110,7 @@ pub async fn start_turn<R: Runtime>(
 }
 
 #[tauri::command]
-pub fn resume_turn_stream<R: Runtime>(
+pub async fn resume_turn_stream<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AssistantRuntimeState>,
     thread_id: String,
@@ -112,7 +118,9 @@ pub fn resume_turn_stream<R: Runtime>(
     after_seq: Option<u64>,
     on_event: Channel<AssistantTurnStreamEnvelope>,
 ) -> Result<ResumeTurnStreamAck> {
-    let dispatch = state.resume_turn_stream(&thread_id, &turn_id, after_seq, on_event.clone())?;
+    let dispatch = state
+        .resume_turn_stream(&thread_id, &turn_id, after_seq, on_event.clone())
+        .await?;
     for item in dispatch.items {
         let _ = on_event.send(item);
     }

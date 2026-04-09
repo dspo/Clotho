@@ -34,15 +34,14 @@
 ```rust
 use agent_core::{Builder, PermissionSet, RuntimeConfig, SoulDefinition};
 
-let mut builder = Builder::new();
-builder.set_config(RuntimeConfig {
-    default_permission: PermissionSet::ReadOnly,
-    provider_adapters: vec!["codex".to_string()],
-    audit_enabled: true,
-});
-
 let soul = SoulDefinition::sourced("SOUL.MD", "# Planner\n\nStay inside planning scope.");
-let runtime = builder.build()?;
+let runtime = Builder::new()
+    .set_config(RuntimeConfig {
+        default_permission: PermissionSet::ReadOnly,
+        provider_adapters: vec!["codex".to_string()],
+        audit_enabled: true,
+    })
+    .build()?;
 assert_eq!(runtime.config().default_permission, PermissionSet::ReadOnly);
 assert_eq!(soul.source.as_deref(), Some("SOUL.MD"));
 ```
@@ -85,15 +84,14 @@ This crate does not depend on any Clotho-specific domain types. Its goal is to p
 ```rust
 use agent_core::{Builder, PermissionSet, RuntimeConfig, SoulDefinition};
 
-let mut builder = Builder::new();
-builder.set_config(RuntimeConfig {
-    default_permission: PermissionSet::ReadOnly,
-    provider_adapters: vec!["codex".to_string()],
-    audit_enabled: true,
-});
-
 let soul = SoulDefinition::sourced("SOUL.MD", "# Planner\n\nStay inside planning scope.");
-let runtime = builder.build()?;
+let runtime = Builder::new()
+    .set_config(RuntimeConfig {
+        default_permission: PermissionSet::ReadOnly,
+        provider_adapters: vec!["codex".to_string()],
+        audit_enabled: true,
+    })
+    .build()?;
 assert_eq!(runtime.config().default_permission, PermissionSet::ReadOnly);
 assert_eq!(soul.source.as_deref(), Some("SOUL.MD"));
 ```

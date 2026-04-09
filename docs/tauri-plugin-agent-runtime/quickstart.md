@@ -262,8 +262,7 @@ impl ToolProvider for LocalWorkspaceProvider {
     }
 }
 
-let mut builder = Builder::new();
-builder
+let runtime = Builder::new()
     .register_provider(
         ProviderRegistration {
             id: "local-workspace".into(),
@@ -275,9 +274,8 @@ builder
         default_permission: PermissionSet::ReadOnly,
         provider_adapters: vec!["codex".into()],
         audit_enabled: true,
-    });
-
-let runtime = builder.build()?;
+    })
+    .build()?;
 assert_eq!(runtime.provider_count(), 1);
 ```
 

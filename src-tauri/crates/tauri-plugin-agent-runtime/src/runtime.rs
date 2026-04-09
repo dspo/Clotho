@@ -95,7 +95,9 @@ pub async fn start_runtime_turn<R: Runtime>(
         .await
         .map_err(request_error)?;
 
-    state.bind_runtime_turn(&local_thread_id, &local_turn_id, &response.turn.id)?;
+    state
+        .bind_runtime_turn(&local_thread_id, &local_turn_id, &response.turn.id)
+        .await?;
     Ok(())
 }
 
@@ -105,7 +107,7 @@ pub async fn interrupt_runtime_turn<R: Runtime>(
     thread_id: String,
     turn_id: String,
 ) -> Result<bool> {
-    let Some(binding) = state.runtime_turn_binding(&thread_id, &turn_id)? else {
+    let Some(binding) = state.runtime_turn_binding(&thread_id, &turn_id).await? else {
         events::emit_debug(
             &app,
             format!(
@@ -140,7 +142,9 @@ pub async fn submit_runtime_request_response<R: Runtime>(
     request_id: String,
     response: Value,
 ) -> Result<String> {
-    let request = state.pending_request_handle(&thread_id, &turn_id, &request_id)?;
+    let request = state
+        .pending_request_handle(&thread_id, &turn_id, &request_id)
+        .await?;
     let resolution_tx = state
         .runtime()
         .current_resolution_tx()
@@ -161,7 +165,9 @@ pub async fn submit_runtime_request_response<R: Runtime>(
     })??;
 
     let request_kind = request.request_kind.clone();
-    state.remove_pending_runtime_request(&thread_id, &turn_id, &request_id)?;
+    state
+        .remove_pending_runtime_request(&thread_id, &turn_id, &request_id)
+        .await?;
     dispatch(
         &app,
         &state,
@@ -173,7 +179,8 @@ pub async fn submit_runtime_request_response<R: Runtime>(
             "requestKind": request_kind,
             "response": response,
         }),
-    )?;
+    )
+    .await?;
 
     Ok(request.request_kind)
 }
@@ -281,7 +288,8 @@ async fn load_runtime_config(
     resolved_config: &ResolvedConfig,
     cli_overrides: Vec<(String, TomlValue)>,
 ) -> Result<Config> {
-    if let Some(codex_home) = codex_home_from_config_path(resolved_config.config_file_path.as_deref())
+    if let Some(codex_home) =
+        codex_home_from_config_path(resolved_config.config_file_path.as_deref())
     {
         return ConfigBuilder::default()
             .codex_home(codex_home)
@@ -329,7 +337,9 @@ fn json_to_toml(value: Value) -> Result<TomlValue> {
             } else if let Some(value) = value.as_f64() {
                 Ok(TomlValue::Float(value))
             } else {
-                Err(Error::InvalidInput("invalid numeric config override".to_string()))
+                Err(Error::InvalidInput(
+                    "invalid numeric config override".to_string(),
+                ))
             }
         }
         Value::String(value) => Ok(TomlValue::String(value)),
@@ -354,7 +364,7 @@ async fn ensure_runtime_thread(
     local_thread_id: &str,
     config_context: Option<&crate::models::ConfigSelection>,
 ) -> Result<String> {
-    if let Some(runtime_thread_id) = state.runtime_thread_id(local_thread_id)? {
+    if let Some(runtime_thread_id) = state.runtime_thread_id(local_thread_id).await? {
         return Ok(runtime_thread_id);
     }
 
@@ -374,7 +384,9 @@ async fn ensure_runtime_thread(
         .await
         .map_err(request_error)?;
 
-    state.bind_runtime_thread(local_thread_id, &response.thread.id)?;
+    state
+        .bind_runtime_thread(local_thread_id, &response.thread.id)
+        .await?;
     Ok(response.thread.id)
 }
 
@@ -446,8 +458,9 @@ async fn handle_server_request<R: Runtime>(
                 })?;
         }
         ServerRequest::CommandExecutionRequestApproval { request_id, params } => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+                .await
             {
                 enqueue_runtime_request(
                     app,
@@ -461,15 +474,17 @@ async fn handle_server_request<R: Runtime>(
                     Some("Command approval".to_string()),
                     summarize_command_execution_request(&params),
                     serde_json::to_value(&params)?,
-                )?;
+                )
+                .await?;
             } else {
                 reject_unroutable_request(client, request_id, "command_execution_request_approval")
                     .await?;
             }
         }
         ServerRequest::FileChangeRequestApproval { request_id, params } => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+                .await
             {
                 enqueue_runtime_request(
                     app,
@@ -483,15 +498,17 @@ async fn handle_server_request<R: Runtime>(
                     Some("File change approval".to_string()),
                     summarize_file_change_request(&params),
                     serde_json::to_value(&params)?,
-                )?;
+                )
+                .await?;
             } else {
                 reject_unroutable_request(client, request_id, "file_change_request_approval")
                     .await?;
             }
         }
         ServerRequest::PermissionsRequestApproval { request_id, params } => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+                .await
             {
                 enqueue_runtime_request(
                     app,
@@ -505,15 +522,17 @@ async fn handle_server_request<R: Runtime>(
                     Some("Permissions approval".to_string()),
                     summarize_permissions_request(&params),
                     serde_json::to_value(&params)?,
-                )?;
+                )
+                .await?;
             } else {
                 reject_unroutable_request(client, request_id, "permissions_request_approval")
                     .await?;
             }
         }
         ServerRequest::ToolRequestUserInput { request_id, params } => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+                .await
             {
                 enqueue_runtime_request(
                     app,
@@ -527,19 +546,28 @@ async fn handle_server_request<R: Runtime>(
                     Some("User input requested".to_string()),
                     summarize_tool_user_input_request(&params),
                     serde_json::to_value(&params)?,
-                )?;
+                )
+                .await?;
             } else {
                 reject_unroutable_request(client, request_id, "tool_request_user_input").await?;
             }
         }
         ServerRequest::McpServerElicitationRequest { request_id, params } => {
-            let local = params
-                .turn_id
-                .as_deref()
-                .and_then(|turn_id| {
-                    state.resolve_local_turn_for_runtime(&params.thread_id, turn_id)
-                })
-                .or_else(|| state.resolve_local_turn_for_runtime_thread(&params.thread_id));
+            let local = if let Some(turn_id) = params.turn_id.as_deref() {
+                state
+                    .resolve_local_turn_for_runtime(&params.thread_id, turn_id)
+                    .await
+            } else {
+                None
+            };
+            let local = match local {
+                Some(local) => Some(local),
+                None => {
+                    state
+                        .resolve_local_turn_for_runtime_thread(&params.thread_id)
+                        .await
+                }
+            };
             if let Some((local_thread_id, local_turn_id)) = local {
                 enqueue_runtime_request(
                     app,
@@ -553,7 +581,8 @@ async fn handle_server_request<R: Runtime>(
                     Some("MCP input requested".to_string()),
                     summarize_mcp_elicitation_request(&params),
                     serde_json::to_value(&params)?,
-                )?;
+                )
+                .await?;
             } else {
                 reject_unroutable_request(client, request_id, "mcp_server_elicitation_request")
                     .await?;
@@ -561,8 +590,9 @@ async fn handle_server_request<R: Runtime>(
         }
         ServerRequest::ApplyPatchApproval { request_id, params } => {
             let runtime_thread_id = params.conversation_id.to_string();
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime_thread(&runtime_thread_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime_thread(&runtime_thread_id)
+                .await
             {
                 enqueue_runtime_request(
                     app,
@@ -576,15 +606,17 @@ async fn handle_server_request<R: Runtime>(
                     Some("Patch approval".to_string()),
                     Some(format!("{} file change(s)", params.file_changes.len())),
                     serde_json::to_value(&params)?,
-                )?;
+                )
+                .await?;
             } else {
                 reject_unroutable_request(client, request_id, "apply_patch_approval").await?;
             }
         }
         ServerRequest::ExecCommandApproval { request_id, params } => {
             let runtime_thread_id = params.conversation_id.to_string();
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime_thread(&runtime_thread_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime_thread(&runtime_thread_id)
+                .await
             {
                 enqueue_runtime_request(
                     app,
@@ -598,7 +630,8 @@ async fn handle_server_request<R: Runtime>(
                     Some("Command approval".to_string()),
                     Some(params.command.join(" ")),
                     serde_json::to_value(&params)?,
-                )?;
+                )
+                .await?;
             } else {
                 reject_unroutable_request(client, request_id, "exec_command_approval").await?;
             }
@@ -648,7 +681,9 @@ async fn execute_dynamic_tool<R: Runtime>(
     params: &DynamicToolCallParams,
 ) -> DynamicToolCallResponse {
     if let Some(agent_runtime) = state.agent_runtime() {
-        let local_turn = state.resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id);
+        let local_turn = state
+            .resolve_local_turn_for_runtime(&params.thread_id, &params.turn_id)
+            .await;
         let permission = agent_runtime.config().default_permission.clone();
         let tool_ctx = ToolContext {
             agent_id: None,
@@ -711,8 +746,9 @@ async fn handle_server_notification<R: Runtime>(
 ) -> Result<()> {
     match notification {
         ServerNotification::TurnStarted(TurnStartedNotification { thread_id, turn }) => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&thread_id, &turn.id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&thread_id, &turn.id)
+                .await
             {
                 dispatch(
                     app,
@@ -723,9 +759,10 @@ async fn handle_server_notification<R: Runtime>(
                     json!({
                         "runtimeThreadId": thread_id,
                         "runtimeTurnId": turn.id,
-                        "title": state.thread_title(&local_thread_id),
+                        "title": state.thread_title(&local_thread_id).await,
                     }),
-                )?;
+                )
+                .await?;
             }
         }
         ServerNotification::ReasoningTextDelta(ReasoningTextDeltaNotification {
@@ -735,10 +772,12 @@ async fn handle_server_notification<R: Runtime>(
             delta,
             ..
         }) => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&thread_id, &turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&thread_id, &turn_id)
+                .await
             {
-                ensure_reasoning_started(app, state, &local_thread_id, &local_turn_id, &item_id)?;
+                ensure_reasoning_started(app, state, &local_thread_id, &local_turn_id, &item_id)
+                    .await?;
                 dispatch(
                     app,
                     state,
@@ -749,7 +788,8 @@ async fn handle_server_notification<R: Runtime>(
                         "blockId": item_id,
                         "textDelta": delta,
                     }),
-                )?;
+                )
+                .await?;
             }
         }
         ServerNotification::ReasoningSummaryTextDelta(ReasoningSummaryTextDeltaNotification {
@@ -759,10 +799,12 @@ async fn handle_server_notification<R: Runtime>(
             delta,
             ..
         }) => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&thread_id, &turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&thread_id, &turn_id)
+                .await
             {
-                ensure_reasoning_started(app, state, &local_thread_id, &local_turn_id, &item_id)?;
+                ensure_reasoning_started(app, state, &local_thread_id, &local_turn_id, &item_id)
+                    .await?;
                 dispatch(
                     app,
                     state,
@@ -773,12 +815,14 @@ async fn handle_server_notification<R: Runtime>(
                         "blockId": item_id,
                         "textDelta": delta,
                     }),
-                )?;
+                )
+                .await?;
             }
         }
         ServerNotification::AgentMessageDelta(delta) => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&delta.thread_id, &delta.turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&delta.thread_id, &delta.turn_id)
+                .await
             {
                 dispatch(
                     app,
@@ -790,7 +834,8 @@ async fn handle_server_notification<R: Runtime>(
                         "messageId": delta.item_id,
                         "textDelta": delta.delta,
                     }),
-                )?;
+                )
+                .await?;
             }
         }
         ServerNotification::ItemStarted(ItemStartedNotification {
@@ -798,8 +843,9 @@ async fn handle_server_notification<R: Runtime>(
             turn_id,
             item,
         }) => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&thread_id, &turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&thread_id, &turn_id)
+                .await
             {
                 if let Some(reasoning_id) = reasoning_item_id(&item) {
                     ensure_reasoning_started(
@@ -808,7 +854,8 @@ async fn handle_server_notification<R: Runtime>(
                         &local_thread_id,
                         &local_turn_id,
                         &reasoning_id,
-                    )?;
+                    )
+                    .await?;
                 } else if let Some(payload) = tool_start_payload(&item) {
                     dispatch(
                         app,
@@ -817,7 +864,8 @@ async fn handle_server_notification<R: Runtime>(
                         &local_turn_id,
                         "tool_call_started",
                         payload,
-                    )?;
+                    )
+                    .await?;
                 }
             }
         }
@@ -826,8 +874,9 @@ async fn handle_server_notification<R: Runtime>(
             turn_id,
             item,
         }) => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&thread_id, &turn_id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&thread_id, &turn_id)
+                .await
             {
                 if let Some(reasoning_id) = reasoning_item_id(&item) {
                     dispatch(
@@ -837,7 +886,8 @@ async fn handle_server_notification<R: Runtime>(
                         &local_turn_id,
                         "reasoning_completed",
                         json!({ "blockId": reasoning_id }),
-                    )?;
+                    )
+                    .await?;
                 } else if let Some(payload) = tool_finished_payload(&item) {
                     dispatch(
                         app,
@@ -846,15 +896,19 @@ async fn handle_server_notification<R: Runtime>(
                         &local_turn_id,
                         "tool_call_finished",
                         payload,
-                    )?;
+                    )
+                    .await?;
                 }
             }
         }
         ServerNotification::TurnCompleted(TurnCompletedNotification { thread_id, turn }) => {
-            if let Some((local_thread_id, local_turn_id)) =
-                state.resolve_local_turn_for_runtime(&thread_id, &turn.id)
+            if let Some((local_thread_id, local_turn_id)) = state
+                .resolve_local_turn_for_runtime(&thread_id, &turn.id)
+                .await
             {
-                let _ = state.clear_pending_requests_for_turn(&local_thread_id, &local_turn_id);
+                let _ = state
+                    .clear_pending_requests_for_turn(&local_thread_id, &local_turn_id)
+                    .await;
                 match turn.status {
                     TurnStatus::Completed => {
                         dispatch(
@@ -864,7 +918,8 @@ async fn handle_server_notification<R: Runtime>(
                             &local_turn_id,
                             "turn_completed",
                             json!({}),
-                        )?;
+                        )
+                        .await?;
                     }
                     TurnStatus::Interrupted => {
                         dispatch(
@@ -874,7 +929,8 @@ async fn handle_server_notification<R: Runtime>(
                             &local_turn_id,
                             "turn_cancelled",
                             json!({}),
-                        )?;
+                        )
+                        .await?;
                     }
                     TurnStatus::Failed => {
                         let (code, message) = turn_error_payload(&turn);
@@ -888,7 +944,8 @@ async fn handle_server_notification<R: Runtime>(
                                 "code": code,
                                 "message": message,
                             }),
-                        )?;
+                        )
+                        .await?;
                     }
                     TurnStatus::InProgress => {}
                 }
@@ -935,7 +992,7 @@ fn build_user_inputs(text: String, attachments: Vec<AttachmentRef>) -> Result<Ve
     Ok(inputs)
 }
 
-fn enqueue_runtime_request<R: Runtime>(
+async fn enqueue_runtime_request<R: Runtime>(
     app: &AppHandle<R>,
     state: &AssistantRuntimeState,
     local_thread_id: &str,
@@ -949,18 +1006,20 @@ fn enqueue_runtime_request<R: Runtime>(
     payload: Value,
 ) -> Result<()> {
     let request_id = encode_request_id(&request_handle);
-    let request = state.store_pending_runtime_request(
-        local_thread_id,
-        local_turn_id,
-        request_id,
-        request_handle,
-        request_kind.to_string(),
-        item_id,
-        approval_id,
-        title,
-        summary,
-        payload,
-    )?;
+    let request = state
+        .store_pending_runtime_request(
+            local_thread_id,
+            local_turn_id,
+            request_id,
+            request_handle,
+            request_kind.to_string(),
+            item_id,
+            approval_id,
+            title,
+            summary,
+            payload,
+        )
+        .await?;
     dispatch(
         app,
         state,
@@ -969,6 +1028,7 @@ fn enqueue_runtime_request<R: Runtime>(
         "runtime_request_pending",
         serde_json::to_value(request)?,
     )
+    .await
 }
 
 async fn reject_unroutable_request(
@@ -1052,7 +1112,7 @@ fn summarize_mcp_elicitation_request(
     }
 }
 
-fn ensure_reasoning_started<R: Runtime>(
+async fn ensure_reasoning_started<R: Runtime>(
     app: &AppHandle<R>,
     state: &AssistantRuntimeState,
     local_thread_id: &str,
@@ -1067,9 +1127,10 @@ fn ensure_reasoning_started<R: Runtime>(
         "reasoning_started",
         json!({ "blockId": block_id }),
     )
+    .await
 }
 
-fn dispatch<R: Runtime>(
+async fn dispatch<R: Runtime>(
     app: &AppHandle<R>,
     state: &AssistantRuntimeState,
     local_thread_id: &str,
@@ -1077,8 +1138,9 @@ fn dispatch<R: Runtime>(
     kind: &str,
     payload: Value,
 ) -> Result<()> {
-    let StreamDispatch { item, subscribers } =
-        state.push_stream_event(local_thread_id, local_turn_id, "runtime", kind, payload)?;
+    let StreamDispatch { item, subscribers } = state
+        .push_stream_event(local_thread_id, local_turn_id, "runtime", kind, payload)
+        .await?;
     for subscriber in subscribers {
         let _ = subscriber.send(item.clone());
     }

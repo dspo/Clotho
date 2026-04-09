@@ -29,12 +29,6 @@ if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
 
 fs.mkdirSync(targetDir, { recursive: true });
 fs.cpSync(sourceDir, targetDir, { recursive: true });
-copyTemplateArtifacts({
-  template,
-  targetDir,
-  localFramework,
-  repoRoot,
-});
 rewriteGeneratedApp({
   targetDir,
   frameworkVersion,
@@ -47,25 +41,6 @@ if (localFramework) {
   console.log('Configured generated app to use local framework dependencies from this repo checkout.');
 } else {
   console.log(`Configured generated app to use framework release version ${frameworkVersion}.`);
-}
-
-function copyTemplateArtifacts({ template, targetDir, localFramework, repoRoot }) {
-  if (!localFramework || template !== 'cosmic-weather') {
-    return;
-  }
-
-  const sourceLockfile = path.join(
-    repoRoot,
-    'examples',
-    'cosmic-weather',
-    'src-tauri',
-    'Cargo.lock',
-  );
-  const targetLockfile = path.join(targetDir, 'src-tauri', 'Cargo.lock');
-
-  if (fs.existsSync(sourceLockfile)) {
-    fs.copyFileSync(sourceLockfile, targetLockfile);
-  }
 }
 
 function detectLocalFramework(candidateRepoRoot) {

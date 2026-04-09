@@ -16,6 +16,10 @@ async-trait = "0.1"
 serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-agent-runtime = { path = "../../../src-tauri/crates/tauri-plugin-agent-runtime" }
+icu_calendar = "=2.1.1"
+icu_locale = "=2.1.1"
+ixdtf = "=0.6.4"
+timezone_provider = "=0.1.2"
 
 [patch.crates-io]
 winres = { path = "../../../src-tauri/patches/winres" }

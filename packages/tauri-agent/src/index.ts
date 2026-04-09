@@ -86,34 +86,34 @@ export type ProposalActionType =
   | 'remove_task_tag';
 
 export interface ProposalAction {
-  action_id: string;
-  action_type: ProposalActionType;
-  target_type: string;
-  target_id: string | null;
+  actionId: string;
+  actionType: ProposalActionType;
+  targetType: string;
+  targetId: string | null;
   title: string;
   summary: string;
-  before_json: Record<string, unknown> | null;
-  after_json: Record<string, unknown>;
+  beforeJson: Record<string, unknown> | null;
+  afterJson: Record<string, unknown>;
 }
 
 export interface ProposalArtifact {
-  artifact_id: string;
-  artifact_type: string;
+  artifactId: string;
+  artifactType: string;
   title: string;
-  content_json: Record<string, unknown>;
+  contentJson: Record<string, unknown>;
 }
 
 export interface ProposalPayload {
-  schema_version: string;
-  proposal_id: string;
-  thread_id: string;
-  turn_id: string;
-  generated_at: string;
+  schemaVersion: string;
+  proposalId: string;
+  threadId: string;
+  turnId: string;
+  generatedAt: string;
   summary: string;
   intent: string;
-  reasoning_summary: string | null;
+  reasoningSummary: string | null;
   warnings: string[];
-  requires_confirmation: boolean;
+  requiresConfirmation: boolean;
   actions: ProposalAction[];
   artifacts: ProposalArtifact[];
 }

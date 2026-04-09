@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use agent_core::AgentRuntime;
 use chrono::Utc;
@@ -7,6 +7,7 @@ use codex_app_server_protocol::RequestId;
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::ipc::Channel;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::config::{DefaultConfigProvider, SharedConfigProvider};
@@ -143,8 +144,8 @@ impl AssistantRuntimeState {
         self.config_provider.request_overrides(selection)
     }
 
-    pub fn list_threads(&self, req: ListThreadsRequest) -> ListThreadsResponse {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+    pub async fn list_threads(&self, req: ListThreadsRequest) -> ListThreadsResponse {
+        let inner = self.inner.lock().await;
         let mut threads = inner
             .threads
             .values()
@@ -183,9 +184,9 @@ impl AssistantRuntimeState {
         ListThreadsResponse { items, next_cursor }
     }
 
-    pub fn get_thread_snapshot(&self, thread_id: &str) -> Result<ThreadSnapshot> {
+    pub async fn get_thread_snapshot(&self, thread_id: &str) -> Result<ThreadSnapshot> {
         let (thread_id, title, blocks, active_turn, config_selection, mut pending_requests) = {
-            let inner = self.inner.lock().expect("assistant runtime state poisoned");
+            let inner = self.inner.lock().await;
             let thread = inner
                 .threads
                 .get(thread_id)
@@ -239,12 +240,12 @@ impl AssistantRuntimeState {
         })
     }
 
-    pub fn create_thread(
+    pub async fn create_thread(
         &self,
         title: Option<String>,
         config_context: Option<ConfigSelection>,
     ) -> CreateThreadResponse {
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let mut inner = self.inner.lock().await;
         let thread_id = Uuid::new_v4().to_string();
         let resolved_title = title
             .map(|title| title.trim().to_string())
@@ -273,7 +274,7 @@ impl AssistantRuntimeState {
         }
     }
 
-    pub fn start_turn(
+    pub async fn start_turn(
         &self,
         thread_id: &str,
         text: &str,
@@ -281,18 +282,20 @@ impl AssistantRuntimeState {
         on_event: Channel<AssistantTurnStreamEnvelope>,
     ) -> Result<StartedTurn> {
         self.start_turn_internal(thread_id, text, config_context, Some(on_event))
+            .await
     }
 
-    pub fn start_background_turn(
+    pub async fn start_background_turn(
         &self,
         thread_id: &str,
         text: &str,
         config_context: Option<ConfigSelection>,
     ) -> Result<StartedTurn> {
         self.start_turn_internal(thread_id, text, config_context, None)
+            .await
     }
 
-    fn start_turn_internal(
+    async fn start_turn_internal(
         &self,
         thread_id: &str,
         text: &str,
@@ -306,7 +309,7 @@ impl AssistantRuntimeState {
             ));
         }
 
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let mut inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get_mut(thread_id)
@@ -377,14 +380,14 @@ impl AssistantRuntimeState {
         })
     }
 
-    pub fn resume_turn_stream(
+    pub async fn resume_turn_stream(
         &self,
         thread_id: &str,
         turn_id: &str,
         after_seq: Option<u64>,
         on_event: Channel<AssistantTurnStreamEnvelope>,
     ) -> Result<ResumeDispatch> {
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let mut inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get_mut(thread_id)
@@ -409,8 +412,11 @@ impl AssistantRuntimeState {
         Ok(ResumeDispatch { items, running })
     }
 
-    pub fn thread_config_selection(&self, thread_id: &str) -> Result<Option<ConfigSelection>> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+    pub async fn thread_config_selection(
+        &self,
+        thread_id: &str,
+    ) -> Result<Option<ConfigSelection>> {
+        let inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get(thread_id)
@@ -418,13 +424,13 @@ impl AssistantRuntimeState {
         Ok(thread.config_context.clone())
     }
 
-    pub fn pending_request_handle(
+    pub async fn pending_request_handle(
         &self,
         thread_id: &str,
         turn_id: &str,
         request_id: &str,
     ) -> Result<PendingRuntimeRequestHandle> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get(thread_id)
@@ -443,20 +449,20 @@ impl AssistantRuntimeState {
         })
     }
 
-    pub fn thread_title(&self, thread_id: &str) -> Option<String> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+    pub async fn thread_title(&self, thread_id: &str) -> Option<String> {
+        let inner = self.inner.lock().await;
         inner
             .threads
             .get(thread_id)
             .map(|thread| thread.title.clone())
     }
 
-    pub fn latest_assistant_message_for_turn(
+    pub async fn latest_assistant_message_for_turn(
         &self,
         thread_id: &str,
         turn_id: &str,
     ) -> Result<Option<(String, String)>> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get(thread_id)
@@ -478,8 +484,8 @@ impl AssistantRuntimeState {
         Ok(message)
     }
 
-    pub fn turn_status(&self, thread_id: &str, turn_id: &str) -> Result<String> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+    pub async fn turn_status(&self, thread_id: &str, turn_id: &str) -> Result<String> {
+        let inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get(thread_id)
@@ -491,12 +497,12 @@ impl AssistantRuntimeState {
         Ok(turn.status.clone())
     }
 
-    pub fn pending_requests_for_turn(
+    pub async fn pending_requests_for_turn(
         &self,
         thread_id: &str,
         turn_id: &str,
     ) -> Result<Vec<PendingRuntimeRequest>> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get(thread_id)
@@ -514,8 +520,8 @@ impl AssistantRuntimeState {
         Ok(items)
     }
 
-    pub fn runtime_thread_id(&self, thread_id: &str) -> Result<Option<String>> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+    pub async fn runtime_thread_id(&self, thread_id: &str) -> Result<Option<String>> {
+        let inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get(thread_id)
@@ -523,8 +529,12 @@ impl AssistantRuntimeState {
         Ok(thread.runtime_thread_id.clone())
     }
 
-    pub fn bind_runtime_thread(&self, thread_id: &str, runtime_thread_id: &str) -> Result<()> {
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+    pub async fn bind_runtime_thread(
+        &self,
+        thread_id: &str,
+        runtime_thread_id: &str,
+    ) -> Result<()> {
+        let mut inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get_mut(thread_id)
@@ -546,13 +556,13 @@ impl AssistantRuntimeState {
         Ok(())
     }
 
-    pub fn bind_runtime_turn(
+    pub async fn bind_runtime_turn(
         &self,
         thread_id: &str,
         turn_id: &str,
         runtime_turn_id: &str,
     ) -> Result<()> {
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let mut inner = self.inner.lock().await;
         let runtime_thread_id = {
             let thread = inner
                 .threads
@@ -590,12 +600,12 @@ impl AssistantRuntimeState {
         Ok(())
     }
 
-    pub fn resolve_local_turn_for_runtime(
+    pub async fn resolve_local_turn_for_runtime(
         &self,
         runtime_thread_id: &str,
         runtime_turn_id: &str,
     ) -> Option<(String, String)> {
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let mut inner = self.inner.lock().await;
         if let Some(binding) = inner
             .runtime_turn_index
             .get(&(runtime_thread_id.to_string(), runtime_turn_id.to_string()))
@@ -620,11 +630,11 @@ impl AssistantRuntimeState {
         Some((local_thread_id, local_turn_id))
     }
 
-    pub fn resolve_local_turn_for_runtime_thread(
+    pub async fn resolve_local_turn_for_runtime_thread(
         &self,
         runtime_thread_id: &str,
     ) -> Option<(String, String)> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let inner = self.inner.lock().await;
         let local_thread_id = inner.runtime_thread_index.get(runtime_thread_id)?.clone();
         let thread = inner.threads.get(&local_thread_id)?;
         let local_turn_id = thread.active_turn_id.clone()?;
@@ -632,12 +642,12 @@ impl AssistantRuntimeState {
         (turn.status == "running").then_some((local_thread_id, local_turn_id))
     }
 
-    pub fn runtime_turn_binding(
+    pub async fn runtime_turn_binding(
         &self,
         thread_id: &str,
         turn_id: &str,
     ) -> Result<Option<RuntimeTurnBinding>> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get(thread_id)
@@ -659,7 +669,7 @@ impl AssistantRuntimeState {
         }
     }
 
-    pub fn store_pending_runtime_request(
+    pub async fn store_pending_runtime_request(
         &self,
         thread_id: &str,
         turn_id: &str,
@@ -672,7 +682,7 @@ impl AssistantRuntimeState {
         summary: Option<String>,
         payload: Value,
     ) -> Result<PendingRuntimeRequest> {
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let mut inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get_mut(thread_id)
@@ -713,13 +723,13 @@ impl AssistantRuntimeState {
         Ok(request)
     }
 
-    pub fn remove_pending_runtime_request(
+    pub async fn remove_pending_runtime_request(
         &self,
         thread_id: &str,
         turn_id: &str,
         request_id: &str,
     ) -> Result<Option<PendingRuntimeRequest>> {
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let mut inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get_mut(thread_id)
@@ -737,8 +747,12 @@ impl AssistantRuntimeState {
         Ok(removed)
     }
 
-    pub fn clear_pending_requests_for_turn(&self, thread_id: &str, turn_id: &str) -> Result<()> {
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+    pub async fn clear_pending_requests_for_turn(
+        &self,
+        thread_id: &str,
+        turn_id: &str,
+    ) -> Result<()> {
+        let mut inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get_mut(thread_id)
@@ -755,7 +769,7 @@ impl AssistantRuntimeState {
         Ok(())
     }
 
-    pub fn push_stream_event<T: Serialize>(
+    pub async fn push_stream_event<T: Serialize>(
         &self,
         thread_id: &str,
         turn_id: &str,
@@ -764,7 +778,7 @@ impl AssistantRuntimeState {
         payload: T,
     ) -> Result<StreamDispatch> {
         let payload = serde_json::to_value(payload)?;
-        let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
+        let mut inner = self.inner.lock().await;
         let thread = inner
             .threads
             .get_mut(thread_id)
