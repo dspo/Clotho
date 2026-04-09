@@ -203,12 +203,12 @@ console.log(config.provider, config.model, config.baseUrl, config.envKey);
 
 ## 4. 定义和注册 function tools
 
-在当前实现里，`function_tools` 的接入分成两层：
+在当前实现里，`function_tools` 的接入通常只需要一层 provider：
 
-1. `FunctionToolDefinition`：描述 tool 的 contract、权限、schema、可见性
-2. `ToolProvider`：真正执行 tool 调用
+1. `ToolProvider::list_tools(...)`：返回 `FunctionToolDefinition`，描述 tool 的 contract、权限、schema、可见性
+2. `ToolProvider::invoke(...)`：真正执行 tool 调用
 
-也就是说，`register_tool(...)` 负责把 tool 暴露到 runtime catalog，`register_provider(...)` 负责执行入口。
+也就是说，宿主通常只需要 `register_provider(...)`。`register_tool(...)` 只在你想对 provider 返回的定义做额外覆盖时才需要显式使用。
 
 ```rust
 use std::sync::Arc;
@@ -263,16 +263,6 @@ impl ToolProvider for LocalWorkspaceProvider {
 
 let mut builder = Builder::new();
 builder
-    .register_tool(FunctionToolDefinition {
-        id: "workspace.list_files".into(),
-        description: "列出工作区文件".into(),
-        namespace: Some("workspace".into()),
-        input_schema: None,
-        output_schema: None,
-        execution_mode: ExecutionMode::Immediate,
-        authz: PermissionSet::ReadOnly,
-        visibility: Visibility::Public,
-    })
     .register_provider(
         ProviderRegistration {
             id: "local-workspace".into(),

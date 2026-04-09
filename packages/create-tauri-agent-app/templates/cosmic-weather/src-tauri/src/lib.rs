@@ -147,37 +147,6 @@ fn demo_config_provider() -> Arc<dyn ConfigProvider> {
 fn build_demo_runtime() -> AgentRuntime {
     let mut builder = Builder::new();
     builder
-        .register_tool(FunctionToolDefinition {
-            id: COSMIC_TOOL_ID.to_string(),
-            description: "Resolve a YYYY-MM-DD birthday into a zodiac sign, date range, and element."
-                .to_string(),
-            namespace: Some("cosmic".to_string()),
-            input_schema: Some(json!({
-                "type": "object",
-                "properties": {
-                    "birthday": {
-                        "type": "string",
-                        "description": "Birthday in YYYY-MM-DD format"
-                    }
-                },
-                "required": ["birthday"],
-                "additionalProperties": false
-            })),
-            output_schema: Some(json!({
-                "type": "object",
-                "properties": {
-                    "sign": { "type": "string" },
-                    "dateRange": { "type": "string" },
-                    "element": { "type": "string" },
-                    "birthday": { "type": "string" }
-                },
-                "required": ["sign", "dateRange", "element", "birthday"],
-                "additionalProperties": false
-            })),
-            execution_mode: ExecutionMode::Immediate,
-            authz: PermissionSet::ReadOnly,
-            visibility: Visibility::Public,
-        })
         .register_provider(
             ProviderRegistration {
                 id: "cosmic-weather-tools".to_string(),
@@ -201,7 +170,7 @@ pub fn run() {
             AgentRuntimePluginBuilder::new()
                 .config_provider(demo_config_provider())
                 .agent_runtime(build_demo_runtime())
-                .include_builtin_native_tools(false),
+                .disable_builtin_native_tools(),
         ))
         .run(tauri::generate_context!())
         .expect("failed to run Cosmic Weather");

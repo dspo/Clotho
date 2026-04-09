@@ -76,6 +76,11 @@ impl AgentRuntimePluginBuilder {
         self
     }
 
+    pub fn disable_builtin_native_tools(mut self) -> Self {
+        self.include_builtin_native_tools = false;
+        self
+    }
+
     pub fn build<R: Runtime>(self) -> TauriPlugin<R> {
         let config_provider = self
             .config_provider
@@ -225,7 +230,10 @@ mod tests {
     #[test]
     fn agent_runtime_metadata_uses_agent_namespace() {
         assert_eq!(PLUGIN_NAME, "agent-runtime");
-        assert_eq!(RUNTIME_PLUGIN_METADATA.status_event, "agent-runtime://status");
+        assert_eq!(
+            RUNTIME_PLUGIN_METADATA.status_event,
+            "agent-runtime://status"
+        );
         assert_eq!(
             RUNTIME_PLUGIN_METADATA.threads_changed_event,
             "agent-runtime://threads-changed"
@@ -234,6 +242,7 @@ mod tests {
         assert_eq!(RUNTIME_PLUGIN_METADATA.audit_directory, "agent-runtime");
         let _ = Builder::new();
         let _ = AgentRuntimePluginBuilder::new()
-            .config_provider(Arc::new(DefaultConfigProvider::default()));
+            .config_provider(Arc::new(DefaultConfigProvider::default()))
+            .disable_builtin_native_tools();
     }
 }
