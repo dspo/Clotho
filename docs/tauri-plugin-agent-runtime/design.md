@@ -95,7 +95,7 @@ API 建议（可直接作为实现参考）
 - Rust (示例签名，具体类型可适度调整)：
   - pub struct Builder { /* register_agent, register_tool, register_provider, set_config */ }
   - pub trait ConfigProvider { fn list_configs(&self) -> Result<ListConfigsResponse>; fn resolve_config(&self, selection: Option<&ConfigSelection>) -> Result<ResolvedConfig>; fn request_overrides(&self, selection: Option<&ConfigSelection>) -> Result<HashMap<String, serde_json::Value>>; }
-  - pub struct AgentRuntimePluginBuilder { /* config_provider(...), agent_runtime(...), include_builtin_native_tools(...)/disable_builtin_native_tools()/enable_builtin_native_tools() */ }
+  - pub struct AgentRuntimePluginBuilder { /* config_provider(...), agent_runtime(...) */ }
   - pub struct AgentDefinition { id: String, name: Option<String>, description: Option<String>, soul: Option<SoulDefinition>, instructions: Option<String>, model_profile: Option<ModelProfile>, tool_bindings: Vec<ToolBinding>, skill_bindings: Vec<SkillBinding>, resource_bindings: Vec<ResourceBinding>, action_policy: ActionPolicy, output_contract: OutputContract, automation_hooks: AutomationHooks, ui_metadata: UiMetadata }
   - pub struct FunctionToolDefinition { id: String, description: String, namespace: Option<String>, input_schema: Option<serde_json::Value>, output_schema: Option<serde_json::Value>, execution_mode: ExecutionMode, authz: PermissionSet, visibility: Visibility }
   - pub trait FunctionToolHandler { fn handle(&self, ctx: &ToolContext, input: serde_json::Value) -> Result<serde_json::Value, ToolError>; }

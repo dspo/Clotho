@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 
 use agent_core::AgentRuntime;
 use chrono::Utc;
-use clotho_adapter::ProposalPayload;
 use codex_app_server_protocol::RequestId;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -19,7 +18,7 @@ use crate::models::{
 };
 use crate::runtime::EmbeddedCodexRuntime;
 
-const DEFAULT_THREAD_TITLE: &str = "新对话";
+const DEFAULT_THREAD_TITLE: &str = "New thread";
 
 #[derive(Clone)]
 pub struct AssistantRuntimeState {
@@ -27,12 +26,11 @@ pub struct AssistantRuntimeState {
     runtime: EmbeddedCodexRuntime,
     config_provider: SharedConfigProvider,
     agent_runtime: Option<Arc<AgentRuntime>>,
-    include_builtin_native_tools: bool,
 }
 
 impl Default for AssistantRuntimeState {
     fn default() -> Self {
-        Self::new(Arc::new(DefaultConfigProvider::default()), None, true)
+        Self::new(Arc::new(DefaultConfigProvider::default()), None)
     }
 }
 
@@ -42,7 +40,6 @@ struct AssistantRuntimeInner {
     runtime_thread_index: HashMap<String, String>,
     runtime_turn_index: HashMap<(String, String), (String, String)>,
     pending_request_index: HashMap<String, (String, String)>,
-    proposals: HashMap<String, ProposalRecord>,
 }
 
 struct ThreadRecord {
@@ -71,12 +68,6 @@ struct TurnRecord {
 struct PendingRuntimeRequestRecord {
     request_id: RequestId,
     request: PendingRuntimeRequest,
-}
-
-struct ProposalRecord {
-    thread_id: String,
-    turn_id: String,
-    proposal: ProposalPayload,
 }
 
 pub struct StartedTurn {
@@ -110,14 +101,12 @@ impl AssistantRuntimeState {
     pub fn new(
         config_provider: SharedConfigProvider,
         agent_runtime: Option<Arc<AgentRuntime>>,
-        include_builtin_native_tools: bool,
     ) -> Self {
         Self {
             inner: Arc::new(Mutex::new(AssistantRuntimeInner::default())),
             runtime: EmbeddedCodexRuntime::default(),
             config_provider,
             agent_runtime,
-            include_builtin_native_tools,
         }
     }
 
@@ -131,10 +120,6 @@ impl AssistantRuntimeState {
 
     pub fn agent_runtime(&self) -> Option<Arc<AgentRuntime>> {
         self.agent_runtime.clone()
-    }
-
-    pub fn include_builtin_native_tools(&self) -> bool {
-        self.include_builtin_native_tools
     }
 
     pub fn list_configs(&self) -> Result<ListConfigsResponse> {
@@ -479,43 +464,6 @@ impl AssistantRuntimeState {
         Ok(message)
     }
 
-    pub fn proposal(
-        &self,
-        thread_id: &str,
-        turn_id: &str,
-        proposal_id: &str,
-    ) -> Result<ProposalPayload> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
-        let proposal = inner
-            .proposals
-            .get(proposal_id)
-            .ok_or_else(|| Error::NotFound(format!("proposal `{proposal_id}`")))?;
-        if proposal.thread_id != thread_id || proposal.turn_id != turn_id {
-            return Err(Error::Conflict(format!(
-                "proposal `{proposal_id}` does not belong to thread `{thread_id}` turn `{turn_id}`"
-            )));
-        }
-        Ok(proposal.proposal.clone())
-    }
-
-    pub fn latest_proposal_for_turn(
-        &self,
-        thread_id: &str,
-        turn_id: &str,
-    ) -> Result<Option<ProposalPayload>> {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
-        if !inner.threads.contains_key(thread_id) {
-            return Err(Error::NotFound(format!("thread `{thread_id}`")));
-        }
-        let proposal = inner
-            .proposals
-            .values()
-            .filter(|record| record.thread_id == thread_id && record.turn_id == turn_id)
-            .max_by(|left, right| left.proposal.generated_at.cmp(&right.proposal.generated_at))
-            .map(|record| record.proposal.clone());
-        Ok(proposal)
-    }
-
     pub fn turn_status(&self, thread_id: &str, turn_id: &str) -> Result<String> {
         let inner = self.inner.lock().expect("assistant runtime state poisoned");
         let thread = inner
@@ -803,20 +751,6 @@ impl AssistantRuntimeState {
     ) -> Result<StreamDispatch> {
         let payload = serde_json::to_value(payload)?;
         let mut inner = self.inner.lock().expect("assistant runtime state poisoned");
-        if kind == "proposal_ready" {
-            if let Some(proposal_value) = payload.get("proposal").cloned() {
-                if let Ok(proposal) = serde_json::from_value::<ProposalPayload>(proposal_value) {
-                    inner.proposals.insert(
-                        proposal.proposal_id.clone(),
-                        ProposalRecord {
-                            thread_id: thread_id.to_string(),
-                            turn_id: turn_id.to_string(),
-                            proposal,
-                        },
-                    );
-                }
-            }
-        }
         let thread = inner
             .threads
             .get_mut(thread_id)
@@ -846,33 +780,6 @@ impl AssistantRuntimeState {
         thread.updated_at = item.emitted_at.clone();
 
         Ok(StreamDispatch { item, subscribers })
-    }
-
-    pub fn list_recent_runs_value(&self, limit: usize) -> Value {
-        let inner = self.inner.lock().expect("assistant runtime state poisoned");
-        let mut runs = inner
-            .threads
-            .values()
-            .flat_map(|thread| {
-                thread.turns.values().map(|turn| {
-                    json!({
-                        "threadId": thread.thread_id,
-                        "threadTitle": thread.title,
-                        "turnId": turn.turn_id,
-                        "acceptedAt": turn.accepted_at,
-                        "status": turn.status,
-                        "lastSeq": turn.last_seq,
-                    })
-                })
-            })
-            .collect::<Vec<_>>();
-        runs.sort_by(|left, right| {
-            right["acceptedAt"]
-                .as_str()
-                .unwrap_or_default()
-                .cmp(left["acceptedAt"].as_str().unwrap_or_default())
-        });
-        Value::Array(runs.into_iter().take(limit.max(1)).collect())
     }
 }
 
@@ -947,7 +854,7 @@ fn apply_stream_item(thread: &mut ThreadRecord, turn_id: &str, item: &AssistantT
                 &mut thread.blocks,
                 &block_id,
                 "reasoning",
-                Some("分析中".to_string()),
+                Some("Reasoning".to_string()),
                 turn_id,
             );
             block.status = Some("streaming".to_string());
@@ -960,7 +867,7 @@ fn apply_stream_item(thread: &mut ThreadRecord, turn_id: &str, item: &AssistantT
                 &mut thread.blocks,
                 &block_id,
                 "reasoning",
-                Some("分析中".to_string()),
+                Some("Reasoning".to_string()),
                 turn_id,
             );
             block.text.push_str(&text_delta);
@@ -1070,7 +977,7 @@ fn apply_stream_item(thread: &mut ThreadRecord, turn_id: &str, item: &AssistantT
                 &mut thread.blocks,
                 &proposal_id,
                 "proposal",
-                Some("提案".to_string()),
+                Some("Proposal".to_string()),
                 turn_id,
             );
             block.text = summary;
@@ -1101,7 +1008,7 @@ fn apply_stream_item(thread: &mut ThreadRecord, turn_id: &str, item: &AssistantT
                 &mut thread.blocks,
                 &proposal_id,
                 "proposal",
-                Some("提案".to_string()),
+                Some("Proposal".to_string()),
                 turn_id,
             );
             if !summary.is_empty() {
@@ -1144,8 +1051,8 @@ fn apply_stream_item(thread: &mut ThreadRecord, turn_id: &str, item: &AssistantT
             thread.blocks.push(ConversationBlock {
                 block_id: Uuid::new_v4().to_string(),
                 kind: "system_notice".to_string(),
-                title: Some("已取消".to_string()),
-                text: "当前 turn 已被取消。".to_string(),
+                title: Some("Cancelled".to_string()),
+                text: "The current turn was cancelled.".to_string(),
                 status: Some("completed".to_string()),
                 metadata: Some(json!({ "turnId": turn_id })),
             });

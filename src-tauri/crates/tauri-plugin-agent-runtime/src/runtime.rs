@@ -20,18 +20,13 @@ use codex_core::config::ConfigBuilder;
 use codex_core::config_loader::{CloudRequirementsLoader, LoaderOverrides};
 use codex_feedback::CodexFeedback;
 use codex_protocol::protocol::SessionSource;
-use clotho_adapter::image::stored_task_image_path;
-use clotho_adapter::ImageRepository;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Runtime};
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use crate::db;
 use crate::error::{Error, Result};
 use crate::events;
 use crate::models::AttachmentRef;
-use crate::native_tools;
-use crate::proposal;
 use crate::session::{AssistantRuntimeState, StreamDispatch};
 
 #[derive(Clone, Default)]
@@ -68,7 +63,6 @@ pub async fn start_runtime_turn<R: Runtime>(
         .runtime()
         .ensure_started(app.clone(), state.clone())
         .await?;
-    let structured_proposal = proposal::should_request_structured_proposal(&text, &mode);
 
     if !mode.eq_ignore_ascii_case("access") {
         events::emit_debug(
@@ -85,12 +79,7 @@ pub async fn start_runtime_turn<R: Runtime>(
     )
     .await?;
 
-    let inputs = build_user_inputs(
-        &app,
-        text,
-        attachments,
-        structured_proposal.then_some(proposal::proposal_output_instruction()),
-    )?;
+    let inputs = build_user_inputs(text, attachments)?;
     let response: TurnStartResponse = request_handle
         .request_typed(ClientRequest::TurnStart {
             request_id: next_request_id(),
@@ -98,7 +87,6 @@ pub async fn start_runtime_turn<R: Runtime>(
                 thread_id: runtime_thread_id.clone(),
                 input: inputs,
                 model: model_override.clone(),
-                output_schema: structured_proposal.then(proposal::proposal_output_schema),
                 ..Default::default()
             },
         })
@@ -166,11 +154,9 @@ pub async fn submit_runtime_request_response<R: Runtime>(
         .map_err(|_| {
             Error::Runtime("embedded Codex runtime resolution channel is closed".to_string())
         })?;
-    completion_rx
-        .await
-        .map_err(|_| {
-            Error::Runtime("embedded Codex runtime resolution ack channel is closed".to_string())
-        })??;
+    completion_rx.await.map_err(|_| {
+        Error::Runtime("embedded Codex runtime resolution ack channel is closed".to_string())
+    })??;
 
     let request_kind = request.request_kind.clone();
     state.remove_pending_runtime_request(&thread_id, &turn_id, &request_id)?;
@@ -239,9 +225,7 @@ impl EmbeddedCodexRuntime {
         inner.resolution_tx = None;
     }
 
-    async fn current_resolution_tx(
-        &self,
-    ) -> Option<mpsc::UnboundedSender<RuntimeBridgeCommand>> {
+    async fn current_resolution_tx(&self) -> Option<mpsc::UnboundedSender<RuntimeBridgeCommand>> {
         let inner = self.inner.lock().await;
         inner.resolution_tx.clone()
     }
@@ -276,9 +260,9 @@ async fn build_start_args() -> Result<(InProcessClientStartArgs, Option<String>,
             cloud_requirements: CloudRequirementsLoader::default(),
             feedback: CodexFeedback::new(),
             config_warnings,
-            session_source: SessionSource::Custom("clotho".to_string()),
+            session_source: SessionSource::Custom("tauri-agent-runtime".to_string()),
             enable_codex_api_key_env: true,
-            client_name: "clotho-assistant".to_string(),
+            client_name: "tauri-agent-runtime".to_string(),
             client_version: env!("CARGO_PKG_VERSION").to_string(),
             experimental_api: true,
             opt_out_notification_methods: Vec::new(),
@@ -399,17 +383,13 @@ async fn handle_server_request<R: Runtime>(
                     "command_execution_request_approval",
                     Some(params.item_id.clone()),
                     params.approval_id.clone(),
-                    Some("命令执行审批".to_string()),
+                    Some("Command approval".to_string()),
                     summarize_command_execution_request(&params),
                     serde_json::to_value(&params)?,
                 )?;
             } else {
-                reject_unroutable_request(
-                    client,
-                    request_id,
-                    "command_execution_request_approval",
-                )
-                .await?;
+                reject_unroutable_request(client, request_id, "command_execution_request_approval")
+                    .await?;
             }
         }
         ServerRequest::FileChangeRequestApproval { request_id, params } => {
@@ -425,17 +405,13 @@ async fn handle_server_request<R: Runtime>(
                     "file_change_request_approval",
                     Some(params.item_id.clone()),
                     None,
-                    Some("文件变更审批".to_string()),
+                    Some("File change approval".to_string()),
                     summarize_file_change_request(&params),
                     serde_json::to_value(&params)?,
                 )?;
             } else {
-                reject_unroutable_request(
-                    client,
-                    request_id,
-                    "file_change_request_approval",
-                )
-                .await?;
+                reject_unroutable_request(client, request_id, "file_change_request_approval")
+                    .await?;
             }
         }
         ServerRequest::PermissionsRequestApproval { request_id, params } => {
@@ -451,17 +427,13 @@ async fn handle_server_request<R: Runtime>(
                     "permissions_request_approval",
                     Some(params.item_id.clone()),
                     None,
-                    Some("权限审批".to_string()),
+                    Some("Permissions approval".to_string()),
                     summarize_permissions_request(&params),
                     serde_json::to_value(&params)?,
                 )?;
             } else {
-                reject_unroutable_request(
-                    client,
-                    request_id,
-                    "permissions_request_approval",
-                )
-                .await?;
+                reject_unroutable_request(client, request_id, "permissions_request_approval")
+                    .await?;
             }
         }
         ServerRequest::ToolRequestUserInput { request_id, params } => {
@@ -477,24 +449,21 @@ async fn handle_server_request<R: Runtime>(
                     "tool_request_user_input",
                     Some(params.item_id.clone()),
                     None,
-                    Some("需要补充信息".to_string()),
+                    Some("User input requested".to_string()),
                     summarize_tool_user_input_request(&params),
                     serde_json::to_value(&params)?,
                 )?;
             } else {
-                reject_unroutable_request(
-                    client,
-                    request_id,
-                    "tool_request_user_input",
-                )
-                .await?;
+                reject_unroutable_request(client, request_id, "tool_request_user_input").await?;
             }
         }
         ServerRequest::McpServerElicitationRequest { request_id, params } => {
             let local = params
                 .turn_id
                 .as_deref()
-                .and_then(|turn_id| state.resolve_local_turn_for_runtime(&params.thread_id, turn_id))
+                .and_then(|turn_id| {
+                    state.resolve_local_turn_for_runtime(&params.thread_id, turn_id)
+                })
                 .or_else(|| state.resolve_local_turn_for_runtime_thread(&params.thread_id));
             if let Some((local_thread_id, local_turn_id)) = local {
                 enqueue_runtime_request(
@@ -506,17 +475,13 @@ async fn handle_server_request<R: Runtime>(
                     "mcp_server_elicitation_request",
                     None,
                     None,
-                    Some("MCP 需要补充信息".to_string()),
+                    Some("MCP input requested".to_string()),
                     summarize_mcp_elicitation_request(&params),
                     serde_json::to_value(&params)?,
                 )?;
             } else {
-                reject_unroutable_request(
-                    client,
-                    request_id,
-                    "mcp_server_elicitation_request",
-                )
-                .await?;
+                reject_unroutable_request(client, request_id, "mcp_server_elicitation_request")
+                    .await?;
             }
         }
         ServerRequest::ApplyPatchApproval { request_id, params } => {
@@ -533,7 +498,7 @@ async fn handle_server_request<R: Runtime>(
                     "apply_patch_approval",
                     Some(params.call_id.clone()),
                     None,
-                    Some("补丁审批".to_string()),
+                    Some("Patch approval".to_string()),
                     Some(format!("{} file change(s)", params.file_changes.len())),
                     serde_json::to_value(&params)?,
                 )?;
@@ -555,7 +520,7 @@ async fn handle_server_request<R: Runtime>(
                     "exec_command_approval",
                     Some(params.call_id.clone()),
                     params.approval_id.clone(),
-                    Some("命令执行审批".to_string()),
+                    Some("Command approval".to_string()),
                     Some(params.command.join(" ")),
                     serde_json::to_value(&params)?,
                 )?;
@@ -584,11 +549,7 @@ async fn handle_server_request<R: Runtime>(
 }
 
 async fn dynamic_tool_specs(state: &AssistantRuntimeState) -> Vec<DynamicToolSpec> {
-    let mut specs = Vec::new();
-
-    if state.include_builtin_native_tools() {
-        specs.extend(native_tools::specs());
-    }
+    let mut specs: Vec<DynamicToolSpec> = Vec::new();
 
     if let Some(agent_runtime) = state.agent_runtime() {
         let runtime_ctx = RuntimeContext {
@@ -639,17 +600,14 @@ async fn execute_dynamic_tool<R: Runtime>(
         }
     }
 
-    if state.include_builtin_native_tools() {
-        native_tools::execute(app, state, params)
-    } else {
-        dynamic_tool_response(
-            json!({
-                "error": format!("unknown dynamic tool `{}`", params.tool),
-                "tool": params.tool,
-            }),
-            false,
-        )
-    }
+    let _ = app;
+    dynamic_tool_response(
+        json!({
+            "error": format!("unknown dynamic tool `{}`", params.tool),
+            "tool": params.tool,
+        }),
+        false,
+    )
 }
 
 fn function_tool_to_dynamic_spec(tool: agent_core::FunctionToolDefinition) -> DynamicToolSpec {
@@ -821,39 +779,6 @@ async fn handle_server_notification<R: Runtime>(
             if let Some((local_thread_id, local_turn_id)) =
                 state.resolve_local_turn_for_runtime(&thread_id, &turn.id)
             {
-                if let Ok(Some((message_id, text))) =
-                    state.latest_assistant_message_for_turn(&local_thread_id, &local_turn_id)
-                {
-                    if let Some(extracted) = proposal::extract_proposal_from_structured_output(
-                        &message_id,
-                        &text,
-                        &local_thread_id,
-                        &local_turn_id,
-                    )
-                    .or_else(|| {
-                        proposal::extract_proposal_from_message(
-                            &message_id,
-                            &text,
-                            &local_thread_id,
-                            &local_turn_id,
-                        )
-                    }) {
-                        dispatch(
-                            app,
-                            state,
-                            &local_thread_id,
-                            &local_turn_id,
-                            "proposal_ready",
-                            json!({
-                                "proposalId": extracted.proposal.proposal_id,
-                                "proposal": extracted.proposal,
-                                "summary": extracted.proposal.summary,
-                                "sourceMessageId": extracted.source_message_id,
-                                "consumeSourceMessage": extracted.consume_source_message,
-                            }),
-                        )?;
-                    }
-                }
                 let _ = state.clear_pending_requests_for_turn(&local_thread_id, &local_turn_id);
                 match turn.status {
                     TurnStatus::Completed => {
@@ -900,62 +825,27 @@ async fn handle_server_notification<R: Runtime>(
     Ok(())
 }
 
-fn build_user_inputs<R: Runtime>(
-    app: &AppHandle<R>,
-    text: String,
-    attachments: Vec<AttachmentRef>,
-    proposal_instruction: Option<&str>,
-) -> Result<Vec<UserInput>> {
+fn build_user_inputs(text: String, attachments: Vec<AttachmentRef>) -> Result<Vec<UserInput>> {
     let mut inputs = vec![UserInput::Text {
         text,
         text_elements: Vec::new(),
     }];
 
-    if let Some(instruction) = proposal_instruction {
-        inputs.push(UserInput::Text {
-            text: instruction.to_string(),
-            text_elements: Vec::new(),
-        });
-    }
-
     if attachments.is_empty() {
         return Ok(inputs);
     }
-
-    let conn = db::open_connection(app)?;
-    let app_data_dir = db::app_data_dir(app)?;
 
     for attachment in attachments {
         let kind = attachment
             .kind
             .as_deref()
             .or_else(|| attachment.path.as_deref().map(|_| "local_image"))
-            .unwrap_or("task_image");
+            .unwrap_or("local_image");
 
         match kind {
-            "task_image" => {
-                let attachment_id = attachment.id.as_deref().ok_or_else(|| {
-                    Error::InvalidInput(
-                        "task_image attachment must provide an id".to_string(),
-                    )
-                })?;
-                let image = ImageRepository::get(&conn, attachment_id)
-                    .map_err(domain_error_to_plugin)?;
-                let image_path =
-                    stored_task_image_path(&app_data_dir, &image.id, &image.filename);
-                if !image_path.exists() {
-                    return Err(Error::NotFound(format!(
-                        "attachment file not found: {}",
-                        image_path.display()
-                    )));
-                }
-                inputs.push(UserInput::LocalImage { path: image_path });
-            }
             "local_image" => {
                 let path = attachment.path.ok_or_else(|| {
-                    Error::InvalidInput(
-                        "local_image attachment must provide a path".to_string(),
-                    )
+                    Error::InvalidInput("local_image attachment must provide a path".to_string())
                 })?;
                 inputs.push(UserInput::LocalImage { path: path.into() });
             }
@@ -1032,15 +922,6 @@ fn encode_request_id(request_id: &RequestId) -> String {
     }
 }
 
-fn domain_error_to_plugin(error: clotho_adapter::DomainError) -> Error {
-    match error {
-        clotho_adapter::DomainError::Database(err) => Error::Sqlite(err),
-        clotho_adapter::DomainError::NotFound(message) => Error::NotFound(message),
-        clotho_adapter::DomainError::InvalidInput(message) => Error::InvalidInput(message),
-        clotho_adapter::DomainError::Conflict(message) => Error::Conflict(message),
-    }
-}
-
 fn summarize_command_execution_request(
     params: &codex_app_server_protocol::CommandExecutionRequestApprovalParams,
 ) -> Option<String> {
@@ -1070,15 +951,19 @@ fn summarize_file_change_request(
 fn summarize_permissions_request(
     params: &codex_app_server_protocol::PermissionsRequestApprovalParams,
 ) -> Option<String> {
-    params.reason.clone().or_else(|| {
-        serde_json::to_string_pretty(&params.permissions).ok()
-    })
+    params
+        .reason
+        .clone()
+        .or_else(|| serde_json::to_string_pretty(&params.permissions).ok())
 }
 
 fn summarize_tool_user_input_request(
     params: &codex_app_server_protocol::ToolRequestUserInputParams,
 ) -> Option<String> {
-    params.questions.first().map(|question| question.question.clone())
+    params
+        .questions
+        .first()
+        .map(|question| question.question.clone())
 }
 
 fn summarize_mcp_elicitation_request(

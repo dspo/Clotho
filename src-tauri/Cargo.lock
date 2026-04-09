@@ -10297,7 +10297,6 @@ version = "0.1.0"
 dependencies = [
  "agent-core",
  "chrono",
- "clotho-adapter",
  "codex-app-server-client",
  "codex-app-server-protocol",
  "codex-arg0",
@@ -10305,7 +10304,6 @@ dependencies = [
  "codex-feedback",
  "codex-protocol",
  "dirs",
- "rusqlite",
  "serde",
  "serde_json",
  "tauri",

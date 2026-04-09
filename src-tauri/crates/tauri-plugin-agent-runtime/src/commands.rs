@@ -7,9 +7,9 @@ use crate::error::Result;
 use crate::events;
 use crate::models::{
     AssistantTurnStreamEnvelope, AttachmentRef, CancelTurnAck, ConfigSelection,
-    CreateThreadResponse, ListConfigsResponse, ListThreadsRequest, ListThreadsResponse, ResolvedConfig,
-    ResumeTurnStreamAck, RuntimeCatalog, StartTurnAck,
-    SubmitRuntimeRequestAck, ThreadSnapshot,
+    CreateThreadResponse, ListConfigsResponse, ListThreadsRequest, ListThreadsResponse,
+    ResolvedConfig, ResumeTurnStreamAck, RuntimeCatalog, StartTurnAck, SubmitRuntimeRequestAck,
+    ThreadSnapshot,
 };
 use crate::runtime;
 use crate::session::{AssistantRuntimeState, StreamDispatch};
@@ -193,6 +193,9 @@ pub fn resolve_config(
 }
 
 #[tauri::command]
-pub fn get_runtime_catalog<R: Runtime>(app: AppHandle<R>) -> Result<RuntimeCatalog> {
-    Ok(catalog::runtime_catalog(&app))
+pub fn get_runtime_catalog<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AssistantRuntimeState>,
+) -> Result<RuntimeCatalog> {
+    Ok(catalog::runtime_catalog(&app, state.inner()))
 }

@@ -35,7 +35,7 @@ fn main() {
 }
 ```
 
-`init()` 默认会使用 `DefaultConfigProvider`，也就是读取 `~/.codex/config.toml`。内建 native tools 默认**不启用**；如果宿主希望接入框架内置的 Clotho native tools，需要显式调用 `.enable_builtin_native_tools()`。
+`init()` 默认会使用 `DefaultConfigProvider`，也就是读取 `~/.codex/config.toml`。framework 本身不会内置宿主业务 tools；如果宿主需要暴露自己的能力，应通过 `Builder` / `ToolProvider` 注册函数工具。
 
 如果宿主想改为项目内 / app 内配置来源，可以切换到：
 
@@ -114,7 +114,7 @@ fn main() {
 }
 ```
 
-`init()` uses `DefaultConfigProvider` by default, which reads `~/.codex/config.toml`. Built-in native tools are **disabled by default**; call `.enable_builtin_native_tools()` only if your host explicitly wants the framework-provided Clotho native tools.
+`init()` uses `DefaultConfigProvider` by default, which reads `~/.codex/config.toml`. The framework no longer ships host-specific native tools; if your host wants to expose capabilities, register them explicitly through `Builder` / `ToolProvider`.
 
 If your host wants project-local or app-local config instead, switch to:
 

@@ -1,8 +1,8 @@
 //! `tauri-plugin-agent-runtime` 是框架对外统一的 Tauri plugin 入口。
 //!
-//! 运行时实现、thread/turn/stream 主链、native tools、proposal 与
-//! catalog/wiring 全部收敛在本 crate 中，对外统一暴露 `agent-runtime`
-//! namespace。
+//! 它负责通用的 thread/turn/streaming、approval、catalog、config 与
+//! runtime bridge；宿主业务逻辑（例如 Clotho 的 domain tools、proposal
+//! contract、DB/image 适配）不应放在本 crate 中。
 
 use std::sync::Arc;
 
@@ -10,12 +10,9 @@ mod audit;
 mod catalog;
 mod commands;
 mod config;
-mod db;
 mod error;
 mod events;
 mod models;
-mod native_tools;
-mod proposal;
 mod runtime;
 mod session;
 
@@ -29,8 +26,8 @@ pub use agent_core::{
     ActionPolicy, AgentDefinition, AgentError, AgentRuntime, ApprovalMode, AutomationHooks,
     Builder, ExecutionMode, FunctionToolDefinition, FunctionToolHandler, IntegrationRegistration,
     ModelProfile, OutputContract, PermissionSet, ProviderRegistration, ResourceBinding,
-    RuntimeConfig, RuntimeContext, SkillBinding, SkillCatalogRegistration, ToolBinding,
-    ToolContext, ToolProvider, UiMetadata, Visibility, SoulDefinition,
+    RuntimeConfig, RuntimeContext, SkillBinding, SkillCatalogRegistration, SoulDefinition,
+    ToolBinding, ToolContext, ToolProvider, UiMetadata, Visibility,
 };
 pub use config::{ConfigProvider, DefaultConfigProvider, TomlConfigProvider};
 pub use error::{Error, Result};
@@ -43,7 +40,6 @@ pub type AgentTurnStreamEnvelope = AssistantTurnStreamEnvelope;
 pub struct AgentRuntimePluginBuilder {
     config_provider: Option<Arc<dyn ConfigProvider>>,
     agent_runtime: Option<Arc<AgentRuntime>>,
-    include_builtin_native_tools: bool,
 }
 
 impl Default for AgentRuntimePluginBuilder {
@@ -57,7 +53,6 @@ impl AgentRuntimePluginBuilder {
         Self {
             config_provider: None,
             agent_runtime: None,
-            include_builtin_native_tools: false,
         }
     }
 
@@ -71,27 +66,11 @@ impl AgentRuntimePluginBuilder {
         self
     }
 
-    pub fn include_builtin_native_tools(mut self, include_builtin_native_tools: bool) -> Self {
-        self.include_builtin_native_tools = include_builtin_native_tools;
-        self
-    }
-
-    pub fn disable_builtin_native_tools(mut self) -> Self {
-        self.include_builtin_native_tools = false;
-        self
-    }
-
-    pub fn enable_builtin_native_tools(mut self) -> Self {
-        self.include_builtin_native_tools = true;
-        self
-    }
-
     pub fn build<R: Runtime>(self) -> TauriPlugin<R> {
         let config_provider = self
             .config_provider
             .unwrap_or_else(|| Arc::new(DefaultConfigProvider::default()));
         let agent_runtime = self.agent_runtime;
-        let include_builtin_native_tools = self.include_builtin_native_tools;
 
         PluginBuilder::new(PLUGIN_NAME)
             .invoke_handler(tauri::generate_handler![
@@ -110,7 +89,6 @@ impl AgentRuntimePluginBuilder {
                 app.manage(AssistantRuntimeState::new(
                     config_provider.clone(),
                     agent_runtime.clone(),
-                    include_builtin_native_tools,
                 ));
                 Ok(())
             })
@@ -235,12 +213,6 @@ mod tests {
     #[test]
     fn agent_runtime_metadata_uses_agent_namespace() {
         assert_eq!(PLUGIN_NAME, "agent-runtime");
-        assert!(!AgentRuntimePluginBuilder::new().include_builtin_native_tools);
-        assert!(
-            AgentRuntimePluginBuilder::new()
-                .enable_builtin_native_tools()
-                .include_builtin_native_tools
-        );
         assert_eq!(
             RUNTIME_PLUGIN_METADATA.status_event,
             "agent-runtime://status"
@@ -253,7 +225,6 @@ mod tests {
         assert_eq!(RUNTIME_PLUGIN_METADATA.audit_directory, "agent-runtime");
         let _ = Builder::new();
         let _ = AgentRuntimePluginBuilder::new()
-            .config_provider(Arc::new(DefaultConfigProvider::default()))
-            .enable_builtin_native_tools();
+            .config_provider(Arc::new(DefaultConfigProvider::default()));
     }
 }

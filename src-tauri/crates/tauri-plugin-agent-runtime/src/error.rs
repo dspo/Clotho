@@ -16,8 +16,6 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("failed to parse TOML: {0}")]
     Toml(#[from] toml::de::Error),
-    #[error("sqlite error: {0}")]
-    Sqlite(#[from] rusqlite::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
