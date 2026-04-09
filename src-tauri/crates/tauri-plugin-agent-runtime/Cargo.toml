@@ -1,0 +1,33 @@
+[package]
+name = "tauri-plugin-agent-runtime"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+links = "tauri-plugin-agent-runtime"
+
+[lib]
+name = "tauri_plugin_agent_runtime"
+path = "src/lib.rs"
+
+[dependencies]
+agent-core = { path = "../agent-core" }
+chrono = { version = "0.4", features = ["serde"] }
+codex-app-server-client = { git = "https://github.com/openai/codex.git", rev = "bb95ec3ec602dfc7762fd92e2746606df9dfea21", package = "codex-app-server-client" }
+codex-app-server-protocol = { git = "https://github.com/openai/codex.git", rev = "bb95ec3ec602dfc7762fd92e2746606df9dfea21", package = "codex-app-server-protocol" }
+codex-arg0 = { git = "https://github.com/openai/codex.git", rev = "bb95ec3ec602dfc7762fd92e2746606df9dfea21", package = "codex-arg0" }
+codex-core = { git = "https://github.com/openai/codex.git", rev = "bb95ec3ec602dfc7762fd92e2746606df9dfea21", package = "codex-core" }
+codex-feedback = { git = "https://github.com/openai/codex.git", rev = "bb95ec3ec602dfc7762fd92e2746606df9dfea21", package = "codex-feedback" }
+codex-protocol = { git = "https://github.com/openai/codex.git", rev = "bb95ec3ec602dfc7762fd92e2746606df9dfea21", package = "codex-protocol" }
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+thiserror = "1"
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+tokio-util = { version = "0.7" }
+toml = "0.8"
+toml_cli = { package = "toml", version = "0.9" }
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

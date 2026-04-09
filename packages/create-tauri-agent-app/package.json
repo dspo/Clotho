@@ -1,0 +1,9 @@
+{
+  "name": "create-tauri-agent-app",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "create-tauri-agent-app": "bin/create-tauri-agent-app.mjs"
+  },
+  "files": ["bin", "templates"]
+}

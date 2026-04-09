@@ -1,0 +1,18 @@
+[package]
+name = "agent-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "agent_core"
+path = "src/lib.rs"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

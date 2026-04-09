@@ -1,0 +1,18 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "automation"
+description = """
+Automation agent runtime permissions: create and continue turns with request submission for unattended automation flows.
+"""
+commands.allow = [
+  "list_threads",
+  "get_thread_snapshot",
+  "create_thread",
+  "start_turn",
+  "resume_turn_stream",
+  "submit_runtime_request",
+  "list_configs",
+  "resolve_config",
+  "get_runtime_catalog",
+]

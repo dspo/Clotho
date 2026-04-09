@@ -1,0 +1,23 @@
+{
+  "name": "@dspo/tauri-agent-react",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@dspo/tauri-agent": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18 || ^19"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "files": ["dist"]
+}

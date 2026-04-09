@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-get-runtime-catalog"
+description = "Enables the get_runtime_catalog command without any pre-configured scope."
+commands.allow = ["get_runtime_catalog"]
+
+[[permission]]
+identifier = "deny-get-runtime-catalog"
+description = "Denies the get_runtime_catalog command without any pre-configured scope."
+commands.deny = ["get_runtime_catalog"]

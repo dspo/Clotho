@@ -1,0 +1,18 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = """
+Default permissions for the reusable agent runtime plugin.
+"""
+permissions = [
+  "allow-list-threads",
+  "allow-get-thread-snapshot",
+  "allow-create-thread",
+  "allow-start-turn",
+  "allow-resume-turn-stream",
+  "allow-cancel-turn",
+  "allow-submit-runtime-request",
+  "allow-list-configs",
+  "allow-resolve-config",
+  "allow-get-runtime-catalog",
+]
