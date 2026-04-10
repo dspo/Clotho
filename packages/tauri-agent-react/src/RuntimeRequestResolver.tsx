@@ -228,6 +228,18 @@ export function buildAutoResponse(
 // Sub-forms (plain HTML, data-* attributes for styling)
 // ---------------------------------------------------------------------------
 
+/** Human-readable labels for protocol decision values. */
+const DECISION_LABELS: Record<string, string> = {
+  accept: 'Accept',
+  acceptForSession: 'Accept (session)',
+  decline: 'Decline',
+  cancel: 'Cancel',
+  Approved: 'Accept',
+  ApprovedForSession: 'Accept (session)',
+  Denied: 'Decline',
+  Abort: 'Abort',
+};
+
 function DecisionButtons({
   decisions,
   submitting,
@@ -247,7 +259,7 @@ function DecisionButtons({
           disabled={submitting}
           onClick={() => onSubmit({ decision })}
         >
-          {decision}
+          {DECISION_LABELS[decision] ?? decision}
         </button>
       ))}
     </div>
@@ -392,23 +404,46 @@ function ElicitationForm({
     Object.fromEntries(fields.map((f) => [f.key, f.defaultValue])),
   );
   const [freeformText, setFreeformText] = useState('');
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     setValues(Object.fromEntries(fields.map((f) => [f.key, f.defaultValue])));
     setFreeformText('');
+    setParseError(null);
+    setValidationError(null);
   }, [fields.map((f) => f.key).join(',')]);
 
   const message = readString(payload, 'message');
 
   function submitAccept() {
+    setParseError(null);
+    setValidationError(null);
+
+    // Validate required fields
+    if (fields.length > 0) {
+      const missing = fields.filter((f) => {
+        if (!f.required) return false;
+        const v = values[f.key];
+        if (v === undefined || v === null || v === '') return true;
+        if (Array.isArray(v) && v.length === 0) return true;
+        return false;
+      });
+      if (missing.length > 0) {
+        setValidationError(`Required fields missing: ${missing.map((f) => f.title).join(', ')}`);
+        return;
+      }
+    }
+
     let content: unknown;
     if (fields.length > 0) {
       content = values;
     } else if (freeformText.trim()) {
       try {
         content = JSON.parse(freeformText);
-      } catch {
-        return; // invalid JSON — do nothing
+      } catch (error) {
+        setParseError(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+        return;
       }
     } else {
       content = null;
@@ -522,10 +557,18 @@ function ElicitationForm({
       ) : (
         <textarea
           data-part="freeform-input"
+          data-error={parseError ? 'true' : undefined}
           value={freeformText}
-          onChange={(e) => setFreeformText(e.target.value)}
+          onChange={(e) => {
+            setFreeformText(e.target.value);
+            setParseError(null);
+          }}
           placeholder="Enter JSON response body (leave empty if not needed)"
         />
+      )}
+
+      {(parseError || validationError) && (
+        <div data-part="error-message">{parseError ?? validationError}</div>
       )}
 
       <div data-part="actions">
@@ -570,15 +613,21 @@ function FreeformFallback({
   onSubmit: (response: unknown) => void;
 }) {
   const [text, setText] = useState('');
+  const [parseError, setParseError] = useState<string | null>(null);
 
   return (
     <div data-part="freeform-fallback">
       <textarea
         data-part="freeform-input"
+        data-error={parseError ? 'true' : undefined}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          setParseError(null);
+        }}
         placeholder="Enter JSON response body"
       />
+      {parseError && <div data-part="error-message">{parseError}</div>}
       <div data-part="actions">
         <button
           type="button"
@@ -587,8 +636,8 @@ function FreeformFallback({
           onClick={() => {
             try {
               onSubmit(JSON.parse(text));
-            } catch {
-              // invalid JSON — do nothing
+            } catch (error) {
+              setParseError(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
             }
           }}
         >

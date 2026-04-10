@@ -134,7 +134,7 @@ async fn auto_resolve_pending_requests<R: Runtime>(
         let Some(response) = auto_resolve_request(policy, &request) else {
             continue;
         };
-        crate::resolve_runtime_request(
+        match crate::resolve_runtime_request(
             app.clone(),
             state.clone(),
             thread_id.to_string(),
@@ -142,7 +142,13 @@ async fn auto_resolve_pending_requests<R: Runtime>(
             request.request_id,
             response,
         )
-        .await?;
+        .await
+        {
+            Ok(_) => {}
+            // Request was already resolved by another caller — safe to skip.
+            Err(crate::error::Error::NotFound(_)) => {}
+            Err(err) => return Err(err),
+        }
     }
 
     Ok(())

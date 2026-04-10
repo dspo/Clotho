@@ -12,6 +12,8 @@ export interface UseTurnStreamOptions {
   turnId: string | null;
   /** Callback invoked for each stream item received. */
   onItem: (item: AssistantTurnStreamEnvelope) => void;
+  /** Optional callback invoked when resume fails. If not provided, errors are silently ignored. */
+  onError?: (error: unknown) => void;
 }
 
 /** Return value of the {@link useTurnStream} hook. */
@@ -47,7 +49,7 @@ export interface UseTurnStreamReturn {
  * ```
  */
 export function useTurnStream(options: UseTurnStreamOptions): UseTurnStreamReturn {
-  const { client, threadId, turnId, onItem } = options;
+  const { client, threadId, turnId, onItem, onError } = options;
 
   const [isAttached, setIsAttached] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
@@ -58,9 +60,11 @@ export function useTurnStream(options: UseTurnStreamOptions): UseTurnStreamRetur
   const lastSeqRef = useRef<number>(0);
   // Guard against concurrent resume calls
   const resumeInFlightRef = useRef(false);
-  // Keep onItem callback ref stable
+  // Keep callback refs stable
   const onItemRef = useRef(onItem);
   onItemRef.current = onItem;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
   // Track mount state
   const mountedRef = useRef(true);
 
@@ -119,6 +123,10 @@ export function useTurnStream(options: UseTurnStreamOptions): UseTurnStreamRetur
           attachedKeyRef.current = key;
           setIsAttached(true);
         }
+      } catch (error) {
+        if (mountedRef.current) {
+          onErrorRef.current?.(error);
+        }
       } finally {
         resumeInFlightRef.current = false;
         if (mountedRef.current) {
@@ -136,15 +144,14 @@ export function useTurnStream(options: UseTurnStreamOptions): UseTurnStreamRetur
     }
   }, [currentKey, detach]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — call detach to reset all state
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      attachedKeyRef.current = null;
-      resumeInFlightRef.current = false;
+      detach();
     };
-  }, []);
+  }, [detach]);
 
   return { isAttached, isResuming, resume, detach };
 }
