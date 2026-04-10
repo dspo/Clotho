@@ -90,7 +90,7 @@ export function ConversationPane({
                 <Badge variant="outline">{resolvedConfig.provider}</Badge>
               )}
               {pendingRequests.length > 0 && (
-                <Badge variant="secondary">{pendingRequests.length} pending request</Badge>
+                <Badge variant="secondary">{pendingRequests.length} 个待处理请求</Badge>
               )}
             </div>
           </div>
@@ -104,7 +104,7 @@ export function ConversationPane({
             )}
             <Button variant="outline" size="sm" onClick={onOpenInspector}>
               <Wrench className="h-4 w-4" />
-              Inspector
+              检查器
             </Button>
             <Button variant="outline" size="sm" onClick={onOpenConfig}>
               <Settings2 className="h-4 w-4" />

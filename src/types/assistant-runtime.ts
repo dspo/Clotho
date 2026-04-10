@@ -286,6 +286,7 @@ export interface ApplyProposalRequest {
   threadId: string;
   turnId: string;
   proposalId: string;
+  proposal?: ProposalPayload;
 }
 
 export interface ApplyProposalAck {

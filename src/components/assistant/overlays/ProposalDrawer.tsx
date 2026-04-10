@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { proposalStatusLabel } from '../status-labels';
 
 interface ProposalDrawerProps {
   open: boolean;
@@ -45,21 +46,6 @@ function JsonPanel({
   );
 }
 
-function statusLabel(status: string | null) {
-  switch (status) {
-    case 'preview':
-      return '待应用';
-    case 'applying':
-      return '应用中';
-    case 'applied':
-      return '已应用';
-    case 'failed':
-      return '失败';
-    default:
-      return status ?? '提案';
-  }
-}
-
 export function ProposalDrawer({
   open,
   proposal,
@@ -85,6 +71,7 @@ export function ProposalDrawer({
         threadId: proposal.thread_id,
         turnId: proposal.turn_id,
         proposalId: proposal.proposal_id,
+        proposal,
       })
       .then((report) => {
         if (!cancelled) {
@@ -118,7 +105,7 @@ export function ProposalDrawer({
           <DialogHeader className="px-6 pt-6">
             <DialogTitle className="flex items-center gap-2">
               <FileJson2 className="h-4 w-4 text-primary" />
-              Proposal Details
+              提案详情
             </DialogTitle>
             <DialogDescription>
               查看提案的 canonical payload、动作明细与 artifact。
@@ -129,11 +116,11 @@ export function ProposalDrawer({
             <>
               <div className="flex flex-wrap items-center gap-2 px-6 pt-2">
                 <Badge variant={status === 'applied' ? 'secondary' : 'outline'}>
-                  {statusLabel(status)}
+                  {proposalStatusLabel(status)}
                 </Badge>
                 <Badge variant="outline">{proposal.intent}</Badge>
-                <Badge variant="outline">{proposal.actions.length} actions</Badge>
-                <Badge variant="outline">{proposal.artifacts.length} artifacts</Badge>
+                <Badge variant="outline">{proposal.actions.length} 个动作</Badge>
+                <Badge variant="outline">{proposal.artifacts.length} 个产物</Badge>
               </div>
 
               <div className="flex flex-wrap gap-2 px-6 py-4">
@@ -155,7 +142,7 @@ export function ProposalDrawer({
               <ScrollArea className="min-h-0 flex-1">
                 <div className="space-y-6 px-6 py-5">
                   <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Preflight</h3>
+                    <h3 className="text-sm font-medium">预检</h3>
                     {simulationLoading ? (
                       <div className="flex items-center gap-2 rounded-xl border p-4 text-sm text-muted-foreground">
                         <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -176,7 +163,7 @@ export function ProposalDrawer({
                                 <span className="text-sm font-medium">预检失败</span>
                               </>
                             )}
-                            <Badge variant="outline">{simulation.actionCount} actions</Badge>
+                            <Badge variant="outline">{simulation.actionCount} 个动作</Badge>
                           </div>
                           {Object.entries(simulation.actionTypeCounts).length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -205,13 +192,13 @@ export function ProposalDrawer({
                       </div>
                     ) : (
                       <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                        当前没有可用的 preflight 结果。
+                        当前没有可用的预检结果。
                       </div>
                     )}
                   </div>
 
                   <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Summary</h3>
+                    <h3 className="text-sm font-medium">摘要</h3>
                     <div className="rounded-xl border p-4 text-sm leading-6 whitespace-pre-wrap">
                       {proposal.summary}
                     </div>
@@ -224,7 +211,7 @@ export function ProposalDrawer({
 
                   {proposal.warnings.length > 0 && (
                     <div className="space-y-3">
-                      <h3 className="text-sm font-medium">Warnings</h3>
+                      <h3 className="text-sm font-medium">警告</h3>
                       <div className="space-y-2">
                         {proposal.warnings.map((warning) => (
                           <div
@@ -240,7 +227,7 @@ export function ProposalDrawer({
                   )}
 
                   <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Actions</h3>
+                    <h3 className="text-sm font-medium">动作</h3>
                     <div className="space-y-3">
                       {proposal.actions.map((action) => (
                         <div key={action.action_id} className="rounded-xl border p-4">
@@ -253,8 +240,8 @@ export function ProposalDrawer({
                             {action.summary}
                           </div>
                           <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                            <JsonPanel label="Before" value={action.before_json} />
-                            <JsonPanel label="After" value={action.after_json} />
+                            <JsonPanel label="变更前" value={action.before_json} />
+                            <JsonPanel label="变更后" value={action.after_json} />
                           </div>
                         </div>
                       ))}
@@ -263,7 +250,7 @@ export function ProposalDrawer({
 
                   {proposal.artifacts.length > 0 && (
                     <div className="space-y-3">
-                      <h3 className="text-sm font-medium">Artifacts</h3>
+                      <h3 className="text-sm font-medium">产物</h3>
                       <div className="space-y-3">
                         {proposal.artifacts.map((artifact) => (
                           <div key={artifact.artifact_id} className="rounded-xl border p-4">
@@ -272,7 +259,7 @@ export function ProposalDrawer({
                               <Badge variant="outline">{artifact.artifact_type}</Badge>
                             </div>
                             <div className="mt-3">
-                              <JsonPanel label="Content" value={artifact.content_json} />
+                              <JsonPanel label="内容" value={artifact.content_json} />
                             </div>
                           </div>
                         ))}
@@ -282,7 +269,7 @@ export function ProposalDrawer({
 
                   <div className="space-y-3">
                     <h3 className="text-sm font-medium">Canonical JSON</h3>
-                    <JsonPanel label="Proposal Payload" value={proposal} />
+                    <JsonPanel label="提案载荷" value={proposal} />
                   </div>
                 </div>
               </ScrollArea>

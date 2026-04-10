@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use chrono::Utc;
 use clotho_domain::{
     ProposalAction, ProposalActionType, ProposalArtifact, ProposalArtifactType, ProposalPayload,
@@ -27,15 +25,12 @@ pub fn extract_proposal_from_message(
 
     let candidate = parse_candidate(text)?;
     let proposal = canonicalize(candidate.value, thread_id, turn_id)?;
-    let _consume_source_message =
-        text[..candidate.span.start].trim().is_empty() && text[candidate.span.end..].trim().is_empty();
 
     Some(ExtractedProposal { proposal })
 }
 
 struct JsonCandidate {
     value: Value,
-    span: Range<usize>,
 }
 
 fn parse_candidate(input: &str) -> Option<JsonCandidate> {
@@ -43,10 +38,7 @@ fn parse_candidate(input: &str) -> Option<JsonCandidate> {
         let substring = &input[offset..];
         let mut stream = serde_json::Deserializer::from_str(substring).into_iter::<Value>();
         if let Some(Ok(value)) = stream.next() {
-            return Some(JsonCandidate {
-                value,
-                span: offset..offset + stream.byte_offset(),
-            });
+            return Some(JsonCandidate { value });
         }
     }
     None
@@ -77,7 +69,10 @@ fn canonicalize(value: Value, thread_id: &str, turn_id: &str) -> Option<Proposal
         .into_iter()
         .map(canonicalize_action)
         .collect::<Option<Vec<_>>>()?;
-    object.insert("actions".to_string(), serde_json::to_value(canonical_actions).ok()?);
+    object.insert(
+        "actions".to_string(),
+        serde_json::to_value(canonical_actions).ok()?,
+    );
 
     let artifacts = object
         .remove("artifacts")
@@ -100,17 +95,33 @@ fn canonicalize_top_level(
     thread_id: &str,
     turn_id: &str,
 ) -> Option<()> {
-    set_default_string(object, &["schemaVersion", "schema_version"], PROPOSAL_SCHEMA_VERSION);
-    set_default_string(object, &["proposalId", "proposal_id"], &Uuid::new_v4().to_string());
+    set_default_string(
+        object,
+        &["schemaVersion", "schema_version"],
+        PROPOSAL_SCHEMA_VERSION,
+    );
+    set_default_string(
+        object,
+        &["proposalId", "proposal_id"],
+        &Uuid::new_v4().to_string(),
+    );
     set_default_string(object, &["threadId", "thread_id"], thread_id);
     set_default_string(object, &["turnId", "turn_id"], turn_id);
-    set_default_string(object, &["generatedAt", "generated_at"], &Utc::now().to_rfc3339());
+    set_default_string(
+        object,
+        &["generatedAt", "generated_at"],
+        &Utc::now().to_rfc3339(),
+    );
 
     require_string(object, &["summary"])?;
     require_string(object, &["intent"])?;
     normalize_optional_string(object, &["reasoningSummary", "reasoning_summary"]);
     normalize_string_array(object, &["warnings"]);
-    normalize_bool(object, &["requiresConfirmation", "requires_confirmation"], true);
+    normalize_bool(
+        object,
+        &["requiresConfirmation", "requires_confirmation"],
+        true,
+    );
     Some(())
 }
 
@@ -125,7 +136,8 @@ fn canonicalize_action(value: Value) -> Option<ProposalAction> {
     let title = take_string(&mut object, &["title"])?;
     let summary = take_string(&mut object, &["summary"])?;
     let before_json = take_nested_json(&mut object, &["beforeJson", "before_json"]);
-    let after_json = take_nested_json(&mut object, &["afterJson", "after_json"]).unwrap_or(Value::Object(Map::new()));
+    let after_json = take_nested_json(&mut object, &["afterJson", "after_json"])
+        .unwrap_or(Value::Object(Map::new()));
     let action_id = take_string(&mut object, &["actionId", "action_id"])
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
@@ -147,8 +159,8 @@ fn canonicalize_artifact(value: Value) -> Option<ProposalArtifact> {
     let artifact_type: ProposalArtifactType =
         serde_json::from_value(Value::String(artifact_type)).ok()?;
     let title = take_string(&mut object, &["title"])?;
-    let content_json =
-        take_nested_json(&mut object, &["contentJson", "content_json"]).unwrap_or(Value::Object(Map::new()));
+    let content_json = take_nested_json(&mut object, &["contentJson", "content_json"])
+        .unwrap_or(Value::Object(Map::new()));
     let artifact_id = take_string(&mut object, &["artifactId", "artifact_id"])
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
@@ -186,7 +198,8 @@ fn normalize_string_array(object: &mut Map<String, Value>, keys: &[&str]) {
     let value = take_value(object, keys)
         .and_then(|value| value.as_array().cloned())
         .map(|items| {
-            items.into_iter()
+            items
+                .into_iter()
                 .filter_map(|item| item.as_str().map(str::to_string))
                 .map(Value::String)
                 .collect::<Vec<_>>()

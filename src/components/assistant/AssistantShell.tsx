@@ -548,7 +548,7 @@ export function AssistantShell() {
       if (attachments.length > 0) {
         useAssistantComposerStore
           .getState()
-          .addAttachments(threadIdOrDraft(activeThreadId), attachments);
+          .addAttachments(activeThreadId, attachments);
         toast.success(`已添加 ${attachments.length} 个图片附件`);
       }
     } catch (error) {
@@ -563,6 +563,7 @@ export function AssistantShell() {
         threadId: proposal.thread_id,
         turnId: proposal.turn_id,
         proposalId: proposal.proposal_id,
+        proposal,
       });
       toast.success('提案已应用');
     } catch (error) {
@@ -658,8 +659,4 @@ export function AssistantShell() {
       />
     </div>
   );
-}
-
-function threadIdOrDraft(threadId: string | null) {
-  return threadId ?? null;
 }

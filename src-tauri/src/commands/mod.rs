@@ -16,5 +16,5 @@ pub fn lock_db(state: &AppState) -> Result<MutexGuard<'_, rusqlite::Connection>,
     state
         .db
         .lock()
-        .map_err(|_| AppError::Database(rusqlite::Error::ExecuteReturnedResults))
+        .map_err(|_| AppError::Runtime("application database lock poisoned".to_string()))
 }

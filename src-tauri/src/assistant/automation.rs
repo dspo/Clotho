@@ -12,10 +12,10 @@ use tauri_plugin_agent_runtime::{
 };
 use uuid::Uuid;
 
+use super::runtime_host;
 use crate::assistant::proposal;
 use crate::error::AppError;
 use crate::state::AssistantAutomationHandle;
-use super::runtime_host;
 
 const AUTOMATION_KIND_DAILY_SCHEDULER: &str = "daily_scheduler";
 const DEFAULT_AUTOMATION_LOCAL_TIME: &str = "09:00";
@@ -115,6 +115,10 @@ async fn run_worker_loop<R: Runtime>(
     handle: AssistantAutomationHandle,
 ) {
     loop {
+        if handle.shutdown.is_cancelled() {
+            break;
+        }
+
         if let Err(error) = process_available_runs(&app, &runtime_state, &handle).await {
             let message = error.to_string();
             let _ = app.emit(
@@ -130,6 +134,7 @@ async fn run_worker_loop<R: Runtime>(
         }
 
         tokio::select! {
+            _ = handle.shutdown.cancelled() => break,
             _ = handle.trigger.notified() => {}
             _ = tokio::time::sleep(Duration::from_secs(WORKER_POLL_INTERVAL_SECONDS)) => {}
         }
@@ -142,6 +147,10 @@ async fn process_available_runs<R: Runtime>(
     handle: &AssistantAutomationHandle,
 ) -> Result<(), AppError> {
     loop {
+        if handle.shutdown.is_cancelled() {
+            return Ok(());
+        }
+
         let config = {
             let db = lock_db(handle)?;
             load_config(&db)?
@@ -230,11 +239,33 @@ async fn execute_run<R: Runtime>(
                     )?;
                     return Ok(());
                 }
-                tokio::time::sleep(Duration::from_secs(1)).await;
+
+                tokio::select! {
+                    _ = handle.shutdown.cancelled() => {
+                        let _ = tauri_plugin_agent_runtime::interrupt_turn(
+                            app.clone(),
+                            runtime_state.clone(),
+                            thread.thread_id.clone(),
+                            started.turn_id.clone(),
+                        )
+                        .await;
+                        let db = lock_db(handle)?;
+                        mark_run_failed(
+                            &db,
+                            &run.run_id,
+                            run.attempt_count,
+                            config,
+                            "daily automation interrupted during app shutdown".to_string(),
+                        )?;
+                        return Ok(());
+                    }
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
             }
             "completed" => {
-                let proposal = extract_turn_proposal(runtime_state, &thread.thread_id, &started.turn_id)
-                    .await?;
+                let proposal =
+                    extract_turn_proposal(runtime_state, &thread.thread_id, &started.turn_id)
+                        .await?;
                 let Some(proposal) = proposal else {
                     let db = lock_db(handle)?;
                     mark_run_failed(
@@ -356,11 +387,15 @@ async fn extract_turn_proposal(
     let Some((_message_id, text)) = runtime_state
         .latest_assistant_message_for_turn(thread_id, turn_id)
         .await
-        .map_err(map_runtime_state_error)? else {
-            return Ok(None);
-        };
+        .map_err(map_runtime_state_error)?
+    else {
+        return Ok(None);
+    };
 
-    Ok(proposal::extract_proposal_from_message(&text, thread_id, turn_id).map(|extracted| extracted.proposal))
+    Ok(
+        proposal::extract_proposal_from_message(&text, thread_id, turn_id)
+            .map(|extracted| extracted.proposal),
+    )
 }
 
 fn load_status(db: &rusqlite::Connection) -> Result<DailyAutomationStatus, AppError> {
@@ -436,23 +471,23 @@ fn load_single_run(
 
 fn map_run_row(row: &rusqlite::Row<'_>) -> Result<DailyAutomationRun, rusqlite::Error> {
     Ok(DailyAutomationRun {
-        run_id: row.get(0)?,
-        run_key: row.get(1)?,
-        automation_kind: row.get(2)?,
-        trigger_kind: row.get(3)?,
-        run_date: row.get(4)?,
-        status: row.get(5)?,
-        attempt_count: row.get(6)?,
-        scheduled_for: row.get(7)?,
-        started_at: row.get(8)?,
-        completed_at: row.get(9)?,
-        next_retry_at: row.get(10)?,
-        thread_id: row.get(11)?,
-        turn_id: row.get(12)?,
-        proposal_id: row.get(13)?,
-        summary: row.get(14)?,
-        error: row.get(15)?,
-        updated_at: row.get(16)?,
+        run_id: row.get("id")?,
+        run_key: row.get("run_key")?,
+        automation_kind: row.get("automation_kind")?,
+        trigger_kind: row.get("trigger_kind")?,
+        run_date: row.get("run_date")?,
+        status: row.get("status")?,
+        attempt_count: row.get("attempt_count")?,
+        scheduled_for: row.get("scheduled_for")?,
+        started_at: row.get("started_at")?,
+        completed_at: row.get("completed_at")?,
+        next_retry_at: row.get("next_retry_at")?,
+        thread_id: row.get("thread_id")?,
+        turn_id: row.get("turn_id")?,
+        proposal_id: row.get("proposal_id")?,
+        summary: row.get("summary")?,
+        error: row.get("error")?,
+        updated_at: row.get("updated_at")?,
     })
 }
 
@@ -816,7 +851,7 @@ fn lock_db(
     handle
         .db
         .lock()
-        .map_err(|_| AppError::Database(rusqlite::Error::ExecuteReturnedResults))
+        .map_err(|_| AppError::Runtime("automation database lock poisoned".to_string()))
 }
 
 fn map_runtime_state_error(error: RuntimeStateError) -> AppError {

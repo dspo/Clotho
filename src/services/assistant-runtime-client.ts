@@ -140,6 +140,7 @@ class AssistantRuntimeClient {
   async startTurn(req: StartTurnRequest, onItem: (item: AssistantTurnStreamEnvelope) => void) {
     const onEvent = new Channel<AssistantTurnStreamEnvelope>(onItem);
     const text = await this.appCommand<string>('assistant_prepare_turn_text', {
+      threadId: req.threadId,
       text: req.text,
       mode: req.mode,
     });

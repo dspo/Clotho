@@ -9,10 +9,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { DEFAULT_MODEL_PRESETS } from './model-presets';
 
 const DEFAULT_VALUE = '__default__';
 const CUSTOM_VALUE = '__custom__';
-const COMMON_MODELS = ['gpt-5.4', 'gpt-5', 'gpt-5-mini', 'o4-mini'];
 
 interface ModelSelectorProps {
   value: string;
@@ -28,7 +28,7 @@ export function ModelSelector({
   const normalizedValue = value.trim();
   const presetValues = [
     resolvedModel?.trim() ?? '',
-    ...COMMON_MODELS,
+    ...DEFAULT_MODEL_PRESETS,
   ].filter((candidate, index, items) => candidate.length > 0 && items.indexOf(candidate) === index);
 
   const selectValue = normalizedValue.length === 0

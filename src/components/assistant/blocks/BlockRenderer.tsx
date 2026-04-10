@@ -8,6 +8,7 @@ import {
   isBlockHidden,
   type PendingRuntimeRequestView,
 } from '@/stores/assistant/helpers';
+import { runtimeStatusLabel } from '../status-labels';
 import { ProposalCard } from './ProposalCard';
 import { RuntimeRequestCard } from './RuntimeRequestCard';
 
@@ -46,33 +47,6 @@ function JsonDetails({
   );
 }
 
-function statusLabel(status: string | null) {
-  switch (status) {
-    case 'streaming':
-      return 'Streaming';
-    case 'running':
-      return 'Running';
-    case 'pending':
-      return 'Pending';
-    case 'preview':
-      return 'Preview';
-    case 'applying':
-      return 'Applying';
-    case 'applied':
-      return 'Applied';
-    case 'completed':
-      return 'Done';
-    case 'failed':
-      return 'Failed';
-    case 'cancelled':
-      return 'Cancelled';
-    case 'expired':
-      return 'Expired';
-    default:
-      return status ?? 'Ready';
-  }
-}
-
 function ReasoningBlock({ block }: { block: ConversationBlock }) {
   const [open, setOpen] = useState(block.status === 'streaming');
 
@@ -95,7 +69,7 @@ function ReasoningBlock({ block }: { block: ConversationBlock }) {
             {block.status === 'streaming' ? '正在推理' : '已完成'}
           </div>
         </div>
-        <Badge variant="outline">{statusLabel(block.status)}</Badge>
+        <Badge variant="outline">{runtimeStatusLabel(block.status)}</Badge>
         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
       </button>
 
@@ -125,7 +99,7 @@ function PlanBlock({ block }: { block: ConversationBlock }) {
             {source === 'system:update_plan' ? '由系统规划工具更新' : '规划状态'}
           </div>
         </div>
-        <Badge variant="outline">{statusLabel(block.status)}</Badge>
+        <Badge variant="outline">{runtimeStatusLabel(block.status)}</Badge>
       </div>
 
       {(block.text || explanation) && (
@@ -138,7 +112,7 @@ function PlanBlock({ block }: { block: ConversationBlock }) {
         <div className="mt-4 space-y-2">
           {plan.map((item, index) => {
             const step = asRecord(item);
-            const label = typeof step?.step === 'string' ? step.step : `Step ${index + 1}`;
+              const label = typeof step?.step === 'string' ? step.step : `步骤 ${index + 1}`;
             const status = typeof step?.status === 'string' ? step.status : 'pending';
             return (
               <div key={`${label}-${index}`} className="flex items-start gap-3 rounded-xl border bg-muted/20 px-3 py-2">
@@ -153,9 +127,9 @@ function PlanBlock({ block }: { block: ConversationBlock }) {
       {(updatedAt || metadata) && (
         <div className="mt-3 space-y-3">
           {updatedAt ? (
-            <div className="text-xs text-muted-foreground">Updated at {updatedAt}</div>
+            <div className="text-xs text-muted-foreground">更新时间 {updatedAt}</div>
           ) : null}
-          <JsonDetails label="Metadata" value={metadata} />
+          <JsonDetails label="元数据" value={metadata} />
         </div>
       )}
     </div>
@@ -208,12 +182,12 @@ export function BlockRenderer({
         <div className="flex items-center gap-2">
           <Cog className="h-4 w-4 text-primary" />
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">{block.title ?? 'Tool Call'}</div>
+            <div className="text-sm font-medium">{block.title ?? '工具调用'}</div>
             <div className="text-xs text-muted-foreground">
               turn {getBlockTurnId(block) ?? 'unknown'}
             </div>
           </div>
-          <Badge variant="outline">{statusLabel(block.status)}</Badge>
+          <Badge variant="outline">{runtimeStatusLabel(block.status)}</Badge>
         </div>
 
         {block.text && (
@@ -261,7 +235,7 @@ export function BlockRenderer({
         <div className="flex items-center gap-2">
           <CircleAlert className="h-4 w-4 text-destructive" />
           <div className="text-sm font-medium text-destructive">
-            {block.title ?? 'Assistant Error'}
+            {block.title ?? '助手错误'}
           </div>
         </div>
         <div className="mt-3 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
@@ -274,7 +248,7 @@ export function BlockRenderer({
   if (block.kind === 'system_notice') {
     return (
       <div className="rounded-2xl border bg-muted/20 p-4">
-        <div className="text-sm font-medium">{block.title ?? 'System Notice'}</div>
+        <div className="text-sm font-medium">{block.title ?? '系统通知'}</div>
         <div className="mt-2 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
           {block.text}
         </div>
@@ -288,13 +262,13 @@ export function BlockRenderer({
     <div className="rounded-2xl border bg-card p-4">
       <div className="flex items-center gap-2">
         <div className="text-sm font-medium">{block.title ?? block.kind}</div>
-        <Badge variant="outline">{statusLabel(block.status)}</Badge>
+        <Badge variant="outline">{runtimeStatusLabel(block.status)}</Badge>
       </div>
       <div className="mt-3 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
         {block.text}
       </div>
       <div className="mt-3">
-        <JsonDetails label="Metadata" value={metadata} />
+        <JsonDetails label="元数据" value={metadata} />
       </div>
     </div>
   );

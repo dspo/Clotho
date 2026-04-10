@@ -57,10 +57,10 @@ export function ToolResultDrawer({
           <DialogHeader className="px-6 pt-6">
             <DialogTitle className="flex items-center gap-2">
               <Cog className="h-4 w-4 text-primary" />
-              Tool Result
+              工具结果
             </DialogTitle>
             <DialogDescription>
-              查看本次工具调用的摘要、输出与结构化 metadata。
+              查看本次工具调用的摘要、输出与结构化元数据。
             </DialogDescription>
           </DialogHeader>
 
@@ -75,7 +75,7 @@ export function ToolResultDrawer({
                 <div className="space-y-6 px-6 py-5">
                   {block.text && (
                     <div className="space-y-3">
-                      <h3 className="text-sm font-medium">Summary</h3>
+                      <h3 className="text-sm font-medium">摘要</h3>
                       <div className="rounded-xl border p-4 text-sm leading-6 whitespace-pre-wrap">
                         {block.text}
                       </div>
@@ -83,15 +83,15 @@ export function ToolResultDrawer({
                   )}
 
                   <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Details</h3>
-                    <JsonPanel label="Metadata" value={metadata} />
+                    <h3 className="text-sm font-medium">详情</h3>
+                    <JsonPanel label="元数据" value={metadata} />
                   </div>
                 </div>
               </ScrollArea>
             </>
           ) : (
             <div className="px-6 py-10 text-sm text-muted-foreground">
-              当前没有可展示的 tool result。
+              当前没有可展示的工具结果。
             </div>
           )}
         </div>

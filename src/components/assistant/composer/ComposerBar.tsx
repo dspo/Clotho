@@ -20,6 +20,7 @@ import type {
 } from '@/types/assistant-runtime';
 import { ModelSelector } from './ModelSelector';
 import { SlashMenu, type SlashMenuItem } from './SlashMenu';
+import { DEFAULT_MODEL_PRESETS } from './model-presets';
 
 type InspectorTab = 'runtime' | 'tools' | 'skills' | 'integrations';
 
@@ -61,82 +62,70 @@ export function ComposerBar({
     () => [
       {
         id: 'plan',
-        group: 'Mode',
-        label: 'Plan 模式',
+        group: '模式',
+        label: '计划模式',
         description: '偏重分析、排期、拆解和 proposal 规划。',
         shortcut: '/plan',
       },
       {
         id: 'default',
-        group: 'Mode',
-        label: 'Default 模式',
+        group: '模式',
+        label: '默认模式',
         description: '偏重执行、读取上下文与调用工具。',
         shortcut: '/default',
       },
       {
         id: 'attach',
-        group: 'Composer',
+        group: '输入',
         label: '添加图片附件',
         description: '把本地图片作为 local image 附件发给 Agent。',
         shortcut: '/attach',
       },
       {
         id: 'config',
-        group: 'Composer',
+        group: '输入',
         label: '打开配置抽屉',
         description: '切换 `.codex/config.toml` 上下文和 profile。',
         shortcut: '/config',
       },
       {
         id: 'model-default',
-        group: 'Composer',
+        group: '输入',
         label: '模型跟随配置默认值',
         description: '清空当前 turn 的模型覆盖。',
         shortcut: '/model',
       },
-      {
-        id: 'model:gpt-5.4',
-        group: 'Composer',
-        label: '切到 gpt-5.4',
-        description: '使用 gpt-5.4 作为本 turn 模型覆盖。',
-      },
-      {
-        id: 'model:gpt-5',
-        group: 'Composer',
-        label: '切到 gpt-5',
-        description: '使用 gpt-5 作为本 turn 模型覆盖。',
-      },
-      {
-        id: 'model:gpt-5-mini',
-        group: 'Composer',
-        label: '切到 gpt-5-mini',
-        description: '使用 gpt-5-mini 作为本 turn 模型覆盖。',
-      },
+      ...DEFAULT_MODEL_PRESETS.map((model) => ({
+        id: `model:${model}`,
+        group: '输入',
+        label: `切换到 ${model}`,
+        description: `使用 ${model} 作为本 turn 的模型覆盖。`,
+      })),
       {
         id: 'runtime',
-        group: 'Inspectors',
-        label: '打开 Runtime Inspector',
-        description: '查看 runtime 连接状态、配置摘要和 debug 消息。',
+        group: '检查器',
+        label: '打开运行时检查器',
+        description: '查看 runtime 连接状态、配置摘要和调试消息。',
         shortcut: '/runtime',
       },
       {
         id: 'tools',
-        group: 'Inspectors',
-        label: '打开 Tools Inspector',
+        group: '检查器',
+        label: '打开工具检查器',
         description: '查看当前内置 native function tools 列表。',
         shortcut: '/tools',
       },
       {
         id: 'skills',
-        group: 'Inspectors',
-        label: '打开 Skills Inspector',
+        group: '检查器',
+        label: '打开技能检查器',
         description: '查看 repo skills；只用于调试，不作为主工作流入口。',
         shortcut: '/skills',
       },
       {
         id: 'integrations',
-        group: 'Inspectors',
-        label: '打开 Integrations Inspector',
+        group: '检查器',
+        label: '打开集成检查器',
         description: '查看外部 integrations / MCP 调试信息。',
         shortcut: '/integrations',
       },
@@ -256,8 +245,8 @@ export function ComposerBar({
                 }
               }}
             >
-              <ToggleGroupItem value="default">Default</ToggleGroupItem>
-              <ToggleGroupItem value="plan">Plan</ToggleGroupItem>
+              <ToggleGroupItem value="default">默认</ToggleGroupItem>
+              <ToggleGroupItem value="plan">计划</ToggleGroupItem>
             </ToggleGroup>
 
             <ModelSelector
@@ -275,7 +264,7 @@ export function ComposerBar({
                 onClick={() => setSlashOpen(true)}
               >
                 <AtSign className="h-4 w-4" />
-                Slash
+                Slash 菜单
               </Button>
               <Button
                 variant="outline"
@@ -295,7 +284,7 @@ export function ComposerBar({
                 onClick={() => onOpenInspector('runtime')}
               >
                 <Wrench className="h-4 w-4" />
-                Inspector
+                检查器
               </Button>
             </div>
 
@@ -303,7 +292,7 @@ export function ComposerBar({
               {isRunning ? (
                 <Button variant="destructive" onClick={onStop}>
                   <Square className="h-4 w-4" />
-                  Stop
+                  停止
                 </Button>
               ) : (
                 <Button disabled={submitDisabled} onClick={onSend}>
@@ -325,7 +314,7 @@ export function ComposerBar({
             模型: {draft.modelOverride.trim() || resolvedConfig?.model || '使用配置默认值'}
           </span>
           <span>
-            Provider: {resolvedConfig?.provider || '从 Codex 配置推断'}
+            提供方: {resolvedConfig?.provider || '从 Codex 配置推断'}
           </span>
           {draft.attachments.length > 0 && (
             <span>附件: {draft.attachments.length}</span>

@@ -53,7 +53,7 @@ pub fn run() {
         .plugin(tauri_plugin_agent_runtime::init_with_builder(
             tauri_plugin_agent_runtime::AgentRuntimePluginBuilder::new()
                 .config_provider(assistant::config::shared_config_provider())
-                .agent_runtime(assistant::runtime_host::build_agent_runtime())
+                .agent_runtime(assistant::runtime_host::build_agent_runtime()),
         ))
         .register_uri_scheme_protocol("clotho", |ctx, request| {
             let uri = request.uri();
@@ -158,12 +158,10 @@ pub fn run() {
                 .body(bytes)
             {
                 Ok(resp) => resp,
-                Err(_) => {
-                    tauri::http::Response::builder()
-                        .status(500)
-                        .body(Vec::new())
-                        .unwrap()
-                }
+                Err(_) => tauri::http::Response::builder()
+                    .status(500)
+                    .body(Vec::new())
+                    .unwrap(),
             }
         })
         .setup(|app| {
@@ -177,21 +175,17 @@ pub fn run() {
 
             let (mcp_enabled, mcp_bind_addr) = load_mcp_settings(&conn);
 
-            let app_state_for_commands = AppState {
-                db: Mutex::new(conn),
-            };
+            let app_state_for_commands = AppState::new(conn);
             app.manage(app_state_for_commands);
 
-            let mcp_app_state = Arc::new(AppState {
-                db: Mutex::new({
-                    let app_data_dir2 = app
-                        .path()
-                        .app_data_dir()
-                        .expect("failed to resolve app data dir");
-                    db::init::initialize_db(app_data_dir2)
-                        .expect("failed to initialize database for mcp")
-                }),
-            });
+            let mcp_app_state = Arc::new(AppState::new({
+                let app_data_dir2 = app
+                    .path()
+                    .app_data_dir()
+                    .expect("failed to resolve app data dir");
+                db::init::initialize_db(app_data_dir2)
+                    .expect("failed to initialize database for mcp")
+            }));
 
             let initial_token: Option<CancellationToken> = if mcp_enabled {
                 Some(commands::mcp::spawn_mcp_server(
@@ -219,6 +213,7 @@ pub fn run() {
             let automation_handle = AssistantAutomationHandle {
                 db: Arc::new(Mutex::new(automation_db)),
                 trigger: Arc::new(tokio::sync::Notify::new()),
+                shutdown: CancellationToken::new(),
             };
             app.manage(automation_handle.clone());
 
@@ -320,6 +315,16 @@ pub fn run() {
             commands::mcp::restart_mcp_server,
             commands::mcp::get_mcp_server_status,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
+                if let Some(handle) = app_handle.try_state::<AssistantAutomationHandle>() {
+                    handle.shutdown.cancel();
+                }
+            }
+        });
 }

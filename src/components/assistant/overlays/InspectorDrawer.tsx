@@ -67,7 +67,7 @@ export function InspectorDrawer({
           <DialogHeader className="px-6 pt-6">
             <DialogTitle className="flex items-center gap-2">
               <Wrench className="h-4 w-4 text-primary" />
-              Assistant Inspector
+              助手检查器
             </DialogTitle>
             <DialogDescription>
               只用于查看 native tools、repo skills、runtime 状态与调试信息。
@@ -77,7 +77,7 @@ export function InspectorDrawer({
           <div className="flex items-center justify-between px-6 pt-2">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={connectionState === 'connected' ? 'secondary' : 'outline'}>
-                {connectionState === 'connected' ? 'Runtime 已连接' : connectionState}
+                {connectionState === 'connected' ? '运行时已连接' : connectionState}
               </Badge>
               {resolvedConfig?.provider && <Badge variant="outline">{resolvedConfig.provider}</Badge>}
               {resolvedConfig?.model && <Badge variant="outline">{resolvedConfig.model}</Badge>}
@@ -99,10 +99,10 @@ export function InspectorDrawer({
             className="min-h-0 flex-1 px-6 pb-6 pt-4"
           >
             <TabsList variant="line" className="w-full justify-start overflow-x-auto">
-              <TabsTrigger value="runtime">Runtime</TabsTrigger>
-              <TabsTrigger value="tools">Tools</TabsTrigger>
-              <TabsTrigger value="skills">Skills</TabsTrigger>
-              <TabsTrigger value="integrations">Integrations</TabsTrigger>
+              <TabsTrigger value="runtime">运行时</TabsTrigger>
+              <TabsTrigger value="tools">工具</TabsTrigger>
+              <TabsTrigger value="skills">技能</TabsTrigger>
+              <TabsTrigger value="integrations">集成</TabsTrigger>
             </TabsList>
 
             <TabsContent value="runtime" className="min-h-0">

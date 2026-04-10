@@ -1,6 +1,4 @@
-use clotho_domain::{
-    apply_proposal, simulate_proposal, ProposalPayload, ProposalSimulationReport,
-};
+use clotho_domain::{apply_proposal, simulate_proposal, ProposalPayload, ProposalSimulationReport};
 use serde::Serialize;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -11,7 +9,7 @@ use uuid::Uuid;
 use crate::assistant::{automation, proposal};
 use crate::commands::lock_db;
 use crate::error::AppError;
-use crate::state::{AppState, AssistantAutomationHandle};
+use crate::state::{AppState, AssistantAutomationHandle, ProposalCacheKey};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,7 +25,12 @@ pub struct StageLocalImageResponse {
 }
 
 #[tauri::command]
-pub fn assistant_prepare_turn_text(text: String, mode: String) -> Result<String, AppError> {
+pub async fn assistant_prepare_turn_text(
+    runtime_state: State<'_, AssistantRuntimeState>,
+    thread_id: String,
+    text: String,
+    mode: String,
+) -> Result<String, AppError> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return Err(AppError::InvalidInput(
@@ -35,8 +38,16 @@ pub fn assistant_prepare_turn_text(text: String, mode: String) -> Result<String,
         ));
     }
 
+    let include_global_soul = runtime_state
+        .get_thread_snapshot(&thread_id)
+        .await?
+        .blocks
+        .is_empty();
+
     Ok(crate::assistant::runtime_host::compose_user_turn_text(
-        trimmed, &mode,
+        trimmed,
+        &mode,
+        include_global_soul,
     ))
 }
 
@@ -48,9 +59,18 @@ pub async fn assistant_apply_proposal<R: Runtime>(
     thread_id: String,
     turn_id: String,
     proposal_id: String,
+    proposal: Option<ProposalPayload>,
 ) -> Result<ApplyProposalAck, AppError> {
     let runtime_state = runtime_state.inner().clone();
-    let proposal = load_turn_proposal(&runtime_state, &thread_id, &turn_id, &proposal_id).await?;
+    let proposal = load_turn_proposal(
+        state.inner(),
+        &runtime_state,
+        &thread_id,
+        &turn_id,
+        &proposal_id,
+        proposal,
+    )
+    .await?;
     let apply_run_id = Uuid::new_v4().to_string();
 
     dispatch_apply_event(
@@ -124,9 +144,18 @@ pub async fn assistant_simulate_proposal(
     thread_id: String,
     turn_id: String,
     proposal_id: String,
+    proposal: Option<ProposalPayload>,
 ) -> Result<ProposalSimulationReport, AppError> {
     let runtime_state = runtime_state.inner().clone();
-    let proposal = load_turn_proposal(&runtime_state, &thread_id, &turn_id, &proposal_id).await?;
+    let proposal = load_turn_proposal(
+        state.inner(),
+        &runtime_state,
+        &thread_id,
+        &turn_id,
+        &proposal_id,
+        proposal,
+    )
+    .await?;
     let db = lock_db(&state)?;
     Ok(simulate_proposal(&db, &proposal))
 }
@@ -197,18 +226,31 @@ pub fn assistant_stage_local_image<R: Runtime>(
 }
 
 async fn load_turn_proposal(
+    state: &AppState,
     runtime_state: &AssistantRuntimeState,
     thread_id: &str,
     turn_id: &str,
     proposal_id: &str,
+    proposal: Option<ProposalPayload>,
 ) -> Result<ProposalPayload, AppError> {
+    if let Some(proposal) = proposal {
+        let proposal = validate_proposal_identity(proposal, thread_id, turn_id, proposal_id)?;
+        cache_proposal(state, proposal.clone())?;
+        return Ok(proposal);
+    }
+
+    if let Some(proposal) = load_cached_proposal(state, thread_id, turn_id, proposal_id)? {
+        return Ok(proposal);
+    }
+
     let Some((_message_id, text)) = runtime_state
         .latest_assistant_message_for_turn(thread_id, turn_id)
-        .await? else {
-            return Err(AppError::NotFound(format!(
-                "assistant message for thread `{thread_id}` turn `{turn_id}` was not found"
-            )));
-        };
+        .await?
+    else {
+        return Err(AppError::NotFound(format!(
+            "assistant message for thread `{thread_id}` turn `{turn_id}` was not found"
+        )));
+    };
 
     let extracted =
         proposal::extract_proposal_from_message(&text, thread_id, turn_id).ok_or_else(|| {
@@ -217,13 +259,64 @@ async fn load_turn_proposal(
             ))
         })?;
 
-    if extracted.proposal.proposal_id != proposal_id {
+    let proposal = validate_proposal_identity(extracted.proposal, thread_id, turn_id, proposal_id)?;
+    cache_proposal(state, proposal.clone())?;
+
+    Ok(proposal)
+}
+
+fn validate_proposal_identity(
+    proposal: ProposalPayload,
+    thread_id: &str,
+    turn_id: &str,
+    proposal_id: &str,
+) -> Result<ProposalPayload, AppError> {
+    if proposal.proposal_id != proposal_id {
         return Err(AppError::Conflict(format!(
             "proposal `{proposal_id}` does not belong to thread `{thread_id}` turn `{turn_id}`"
         )));
     }
+    if proposal.thread_id != thread_id || proposal.turn_id != turn_id {
+        return Err(AppError::Conflict(format!(
+            "proposal `{proposal_id}` payload does not match thread `{thread_id}` turn `{turn_id}`"
+        )));
+    }
+    Ok(proposal)
+}
 
-    Ok(extracted.proposal)
+fn load_cached_proposal(
+    state: &AppState,
+    thread_id: &str,
+    turn_id: &str,
+    proposal_id: &str,
+) -> Result<Option<ProposalPayload>, AppError> {
+    let cache = lock_proposal_cache(state)?;
+    Ok(cache
+        .get(&ProposalCacheKey::new(thread_id, turn_id, proposal_id))
+        .cloned())
+}
+
+fn cache_proposal(state: &AppState, proposal: ProposalPayload) -> Result<(), AppError> {
+    let key = ProposalCacheKey::new(
+        &proposal.thread_id,
+        &proposal.turn_id,
+        &proposal.proposal_id,
+    );
+    let mut cache = lock_proposal_cache(state)?;
+    cache.insert(key, proposal);
+    Ok(())
+}
+
+fn lock_proposal_cache(
+    state: &AppState,
+) -> Result<
+    std::sync::MutexGuard<'_, std::collections::HashMap<ProposalCacheKey, ProposalPayload>>,
+    AppError,
+> {
+    state
+        .proposal_cache
+        .lock()
+        .map_err(|_| AppError::Runtime("proposal cache lock poisoned".to_string()))
 }
 
 async fn dispatch_apply_event<R: Runtime, T: Serialize>(

@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use async_trait::async_trait;
 use clotho_domain::{
@@ -18,12 +18,18 @@ use crate::db;
 
 const DEFAULT_LIMIT: usize = 50;
 
-static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+static HOST_TOOLS_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
 pub struct ClothoToolProvider;
 
 pub fn configure_app_data_dir(app_data_dir: PathBuf) {
-    let _ = APP_DATA_DIR.set(app_data_dir);
+    if HOST_TOOLS_DB.get().is_some() {
+        return;
+    }
+
+    let connection = db::init::initialize_db(app_data_dir)
+        .expect("failed to initialize assistant host-tools database");
+    let _ = HOST_TOOLS_DB.set(Arc::new(Mutex::new(connection)));
 }
 
 #[async_trait]
@@ -140,7 +146,7 @@ impl ToolProvider for ClothoToolProvider {
         tool_id: &str,
         input: Value,
     ) -> Result<Value, AgentError> {
-        let conn = open_connection()?;
+        let conn = lock_connection()?;
         match tool_id {
             "get_project" => get_project(&conn, &required_string(&input, "id")?),
             "list_projects" => list_projects(
@@ -167,22 +173,27 @@ impl ToolProvider for ClothoToolProvider {
                 optional_string(&input, "taskId").as_deref(),
                 bounded_limit(&input, "limit", DEFAULT_LIMIT, 200),
             ),
-            "get_schedule_stats" => get_schedule_stats(
-                &conn,
-                optional_string(&input, "projectId").as_deref(),
-            ),
+            "get_schedule_stats" => {
+                get_schedule_stats(&conn, optional_string(&input, "projectId").as_deref())
+            }
             "simulate_proposal" => simulate_proposal(&conn, &input),
-            other => Err(AgentError::InvalidInput(format!("unknown dynamic tool `{other}`"))),
+            other => Err(AgentError::InvalidInput(format!(
+                "unknown dynamic tool `{other}`"
+            ))),
         }
     }
 }
 
-fn open_connection() -> Result<Connection, AgentError> {
-    let app_data_dir = APP_DATA_DIR
+fn lock_connection() -> Result<MutexGuard<'static, Connection>, AgentError> {
+    HOST_TOOLS_DB
         .get()
-        .cloned()
-        .ok_or_else(|| AgentError::Execution("host app data dir is unavailable".to_string()))?;
-    db::init::initialize_db(app_data_dir).map_err(|error| AgentError::Execution(error.to_string()))
+        .ok_or_else(|| {
+            AgentError::Execution("assistant host-tools database is unavailable".to_string())
+        })?
+        .lock()
+        .map_err(|_| {
+            AgentError::Execution("assistant host-tools database lock poisoned".to_string())
+        })
 }
 
 fn spec(id: &str, description: &str, input_schema: Value) -> FunctionToolDefinition {
@@ -239,7 +250,11 @@ fn get_project(conn: &Connection, id: &str) -> Result<Value, AgentError> {
     Ok(project_with_stats_value(&project))
 }
 
-fn list_projects(conn: &Connection, status: Option<&str>, limit: usize) -> Result<Value, AgentError> {
+fn list_projects(
+    conn: &Connection,
+    status: Option<&str>,
+    limit: usize,
+) -> Result<Value, AgentError> {
     let mut items = ProjectRepository::list(conn, status).map_err(domain_error)?;
     items.truncate(limit);
     Ok(json!({
@@ -249,7 +264,8 @@ fn list_projects(conn: &Connection, status: Option<&str>, limit: usize) -> Resul
 
 fn get_task(conn: &Connection, id: &str) -> Result<Value, AgentError> {
     let detail = TaskRepository::get_detail(conn, id).map_err(domain_error)?;
-    let progress = TaskRepository::list_progress_limited(conn, id, Some(20)).map_err(domain_error)?;
+    let progress =
+        TaskRepository::list_progress_limited(conn, id, Some(20)).map_err(domain_error)?;
     Ok(task_detail_value(&detail, &progress))
 }
 
@@ -284,7 +300,11 @@ fn search_tasks(
     }))
 }
 
-fn list_dependencies(conn: &Connection, task_id: Option<&str>, limit: usize) -> Result<Value, AgentError> {
+fn list_dependencies(
+    conn: &Connection,
+    task_id: Option<&str>,
+    limit: usize,
+) -> Result<Value, AgentError> {
     let items = DependencyRepository::list_detailed(conn, task_id, limit).map_err(domain_error)?;
     Ok(json!({
         "items": items.iter().map(dependency_value).collect::<Vec<_>>(),
@@ -297,12 +317,13 @@ fn get_schedule_stats(conn: &Connection, project_id: Option<&str>) -> Result<Val
 }
 
 fn simulate_proposal(conn: &Connection, arguments: &Value) -> Result<Value, AgentError> {
-    let proposal_value = arguments
-        .get("proposal")
-        .cloned()
-        .ok_or_else(|| AgentError::InvalidInput("missing required argument `proposal`".to_string()))?;
+    let proposal_value = arguments.get("proposal").cloned().ok_or_else(|| {
+        AgentError::InvalidInput("missing required argument `proposal`".to_string())
+    })?;
     let proposal = serde_json::from_value::<clotho_domain::ProposalPayload>(proposal_value)
-        .map_err(|error| AgentError::InvalidInput(format!("proposal must be valid JSON payload: {error}")))?;
+        .map_err(|error| {
+            AgentError::InvalidInput(format!("proposal must be valid JSON payload: {error}"))
+        })?;
     let simulation = simulate_clotho_proposal(conn, &proposal);
 
     Ok(json!({

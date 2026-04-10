@@ -3,26 +3,12 @@ import type { ConversationBlock, ProposalPayload } from '@/types/assistant-runti
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getProposalPayload } from '@/stores/assistant/helpers';
+import { proposalStatusLabel } from '../status-labels';
 
 interface ProposalCardProps {
   block: ConversationBlock;
   onApply: (proposal: ProposalPayload) => Promise<void>;
   onOpen: (proposal: ProposalPayload) => void;
-}
-
-function statusLabel(status: string | null) {
-  switch (status) {
-    case 'preview':
-      return '待应用';
-    case 'applying':
-      return '应用中';
-    case 'applied':
-      return '已应用';
-    case 'failed':
-      return '失败';
-    default:
-      return status ?? '提案';
-  }
 }
 
 export function ProposalCard({ block, onApply, onOpen }: ProposalCardProps) {
@@ -35,7 +21,7 @@ export function ProposalCard({ block, onApply, onOpen }: ProposalCardProps) {
         <div className="flex items-center gap-2">
           <FileJson2 className="h-4 w-4 text-primary" />
           <div className="text-sm font-medium">提案</div>
-          <Badge variant="outline">{statusLabel(block.status)}</Badge>
+          <Badge variant="outline">{proposalStatusLabel(block.status)}</Badge>
         </div>
         <div className="mt-3 text-sm text-muted-foreground">{block.text}</div>
       </div>
@@ -49,11 +35,11 @@ export function ProposalCard({ block, onApply, onOpen }: ProposalCardProps) {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">提案</div>
           <div className="text-xs text-muted-foreground">
-            {proposal.intent} · {proposal.actions.length} actions · {proposal.artifacts.length} artifacts
+            {proposal.intent} · {proposal.actions.length} 个动作 · {proposal.artifacts.length} 个产物
           </div>
         </div>
         <Badge variant={block.status === 'applied' ? 'secondary' : 'outline'}>
-          {statusLabel(block.status)}
+          {proposalStatusLabel(block.status)}
         </Badge>
       </div>
 
@@ -62,7 +48,7 @@ export function ProposalCard({ block, onApply, onOpen }: ProposalCardProps) {
       <div className="mt-3 flex flex-wrap gap-2">
         {proposal.requires_confirmation && <Badge variant="outline">需要确认</Badge>}
         {proposal.warnings.length > 0 && (
-          <Badge variant="outline">{proposal.warnings.length} warnings</Badge>
+          <Badge variant="outline">{proposal.warnings.length} 条警告</Badge>
         )}
       </div>
 
