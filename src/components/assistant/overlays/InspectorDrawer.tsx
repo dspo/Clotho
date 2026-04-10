@@ -161,13 +161,13 @@ export function InspectorDrawer({
                 <div className="space-y-4 py-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border p-4">
-                      <div className="text-xs text-muted-foreground">Native Tools</div>
+                      <div className="text-xs text-muted-foreground">原生工具</div>
                       <div className="mt-1 text-sm font-medium">
                         {catalog?.tools.length ?? 0}
                       </div>
                     </div>
                     <div className="rounded-xl border p-4">
-                      <div className="text-xs text-muted-foreground">Recent Tool Audits</div>
+                      <div className="text-xs text-muted-foreground">最近工具审计</div>
                       <div className="mt-1 text-sm font-medium">
                         {catalog?.toolAudits.length ?? 0}
                       </div>
@@ -176,13 +176,13 @@ export function InspectorDrawer({
 
                   {catalog?.toolAuditLogPath && (
                     <div className="rounded-xl border p-4">
-                      <div className="text-xs text-muted-foreground">Audit Log Path</div>
+                      <div className="text-xs text-muted-foreground">审计日志路径</div>
                       <div className="mt-2 break-all text-sm">{catalog.toolAuditLogPath}</div>
                     </div>
                   )}
 
                   <div className="space-y-2">
-                    <h3 className="text-sm font-medium">Tool Registry</h3>
+                    <h3 className="text-sm font-medium">工具注册表</h3>
                     {!catalog?.tools.length && <EmptyState text="当前没有可见的 native tools。" />}
                     {catalog?.tools.map((tool) => (
                       <div key={tool.name} className="rounded-xl border p-4">
@@ -195,7 +195,7 @@ export function InspectorDrawer({
                   </div>
 
                   <div className="space-y-2">
-                    <h3 className="text-sm font-medium">Recent Audit Trail</h3>
+                    <h3 className="text-sm font-medium">最近审计轨迹</h3>
                     {!catalog?.toolAudits.length && (
                       <EmptyState text="当前还没有 native tool 审计记录。" />
                     )}
@@ -204,7 +204,7 @@ export function InspectorDrawer({
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-medium">{audit.toolName}</div>
                           <Badge variant={audit.success ? 'secondary' : 'destructive'}>
-                            {audit.success ? 'success' : 'failed'}
+                            {audit.success ? '成功' : '失败'}
                           </Badge>
                           <Badge variant="outline">{audit.durationMs} ms</Badge>
                         </div>

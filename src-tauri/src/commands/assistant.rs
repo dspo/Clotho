@@ -338,8 +338,14 @@ async fn dispatch_apply_event<R: Runtime, T: Serialize>(
 
 fn sanitized_extension(filename: &str, mime_type: Option<&str>) -> String {
     let from_filename = Path::new(filename)
-        .extension()
+        .file_name()
         .and_then(|value| value.to_str())
+        .and_then(|value| {
+            value
+                .split_once('.')
+                .filter(|(base, extension)| !base.is_empty() && !extension.is_empty())
+                .map(|(_, extension)| extension)
+        })
         .unwrap_or_default();
     let candidate = if !from_filename.is_empty() {
         from_filename
@@ -356,10 +362,21 @@ fn sanitized_extension(filename: &str, mime_type: Option<&str>) -> String {
     };
 
     candidate
-        .chars()
-        .filter(|value| value.is_ascii_alphanumeric())
-        .collect::<String>()
-        .to_lowercase()
+        .split('.')
+        .filter_map(|segment| {
+            let sanitized = segment
+                .chars()
+                .filter(|value| value.is_ascii_alphanumeric())
+                .collect::<String>()
+                .to_lowercase();
+            if sanitized.is_empty() {
+                None
+            } else {
+                Some(sanitized)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 fn path_to_string(path: &PathBuf) -> Result<String, AppError> {
@@ -373,4 +390,19 @@ fn path_to_string(path: &PathBuf) -> Result<String, AppError> {
 
 fn io_error(error: std::io::Error) -> AppError {
     AppError::InvalidInput(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitized_extension;
+
+    #[test]
+    fn sanitized_extension_preserves_multi_part_suffixes() {
+        assert_eq!(sanitized_extension("archive.tar.gz", None), "tar.gz");
+    }
+
+    #[test]
+    fn sanitized_extension_ignores_hidden_filename_prefixes() {
+        assert_eq!(sanitized_extension(".env", None), "");
+    }
 }

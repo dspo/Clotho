@@ -94,7 +94,7 @@ function PlanBlock({ block }: { block: ConversationBlock }) {
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary" />
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium">{block.title ?? 'Plan'}</div>
+          <div className="text-sm font-medium">{block.title ?? '计划'}</div>
           <div className="text-xs text-muted-foreground">
             {source === 'system:update_plan' ? '由系统规划工具更新' : '规划状态'}
           </div>
