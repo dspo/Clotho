@@ -12,6 +12,7 @@ mod commands;
 mod config;
 mod error;
 mod events;
+pub mod headless;
 mod models;
 mod runtime;
 mod session;
@@ -29,8 +30,12 @@ pub use agent_core::{
     RuntimeConfig, RuntimeContext, SkillBinding, SkillCatalogRegistration, SoulDefinition,
     ToolBinding, ToolContext, ToolProvider, UiMetadata, Visibility,
 };
-pub use config::{ConfigProvider, DefaultConfigProvider, TomlConfigProvider};
+pub use config::{ConfigProvider, DefaultConfigProvider, MultiSourceConfigProvider, TomlConfigProvider};
 pub use error::{Error, Result};
+pub use headless::{
+    auto_resolve_request, run_headless_turn, AutoResolutionPolicy, HeadlessTurnResult,
+    HeadlessTurnRunnerConfig,
+};
 pub use models::*;
 pub use session::{AssistantRuntimeState, StartedTurn, StreamDispatch};
 pub type AgentRuntimeState = AssistantRuntimeState;
