@@ -395,6 +395,9 @@ fn app_err(e: crate::error::AppError) -> ErrorData {
         crate::error::AppError::Conflict(msg) => {
             ErrorData::new(ErrorCode::INVALID_PARAMS, msg, None)
         }
+        crate::error::AppError::Runtime(msg) => {
+            ErrorData::new(ErrorCode::INTERNAL_ERROR, msg, None)
+        }
     }
 }
 

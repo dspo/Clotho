@@ -3,7 +3,9 @@ import { Loader2, RotateCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { assistantRuntimeClient } from '@/services/assistant-runtime-client';
 import { useSettingsStore } from '@/stores/settings-store';
+import type { DailyAutomationStatus } from '@/types/assistant-runtime';
 import {
   Dialog,
   DialogContent,
@@ -15,9 +17,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 
-type SettingsTab = 'mcp';
+type SettingsTab = 'mcp' | 'assistant';
 
 const NAV_ITEMS: { id: SettingsTab; label: string }[] = [
+  { id: 'assistant', label: 'Assistant' },
   { id: 'mcp', label: 'MCP' },
 ];
 
@@ -42,8 +45,45 @@ interface McpServerStatus {
   message?: string | null;
 }
 
+function Toggle({
+  checked,
+  disabled,
+  onToggle,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      disabled={disabled}
+      className={cn(
+        'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+        checked ? 'bg-primary' : 'bg-muted',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0.5',
+        )}
+      />
+    </button>
+  );
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString();
+}
+
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('mcp');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('assistant');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -73,6 +113,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
           {/* Right panel */}
           <div className="flex-1 p-6 overflow-y-auto">
+            {activeTab === 'assistant' && <AssistantAutomationPanel />}
             {activeTab === 'mcp' && <McpPanel />}
           </div>
         </div>
@@ -230,24 +271,14 @@ function McpPanel() {
 
           <div className="flex items-center justify-between">
             <Label>Enabled</Label>
-            <button
-              onClick={() => {
+            <Toggle
+              checked={draftEnabled}
+              disabled={loading || saving || restarting}
+              onToggle={() => {
                 setDraftEnabled(!draftEnabled);
                 setDirty(true);
               }}
-              disabled={loading || saving || restarting}
-              className={cn(
-                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                draftEnabled ? 'bg-primary' : 'bg-muted',
-              )}
-            >
-              <span
-                className={cn(
-                  'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
-                  draftEnabled ? 'translate-x-4' : 'translate-x-0.5',
-                )}
-              />
-            </button>
+            />
           </div>
 
           <div className="rounded-md border p-3 space-y-1">
@@ -295,6 +326,311 @@ function McpPanel() {
               )}
               Restart
             </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssistantAutomationPanel() {
+  const [status, setStatus] = useState<DailyAutomationStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [runningNow, setRunningNow] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [draftEnabled, setDraftEnabled] = useState(false);
+  const [draftLocalTime, setDraftLocalTime] = useState('09:00');
+  const [draftConfigFilePath, setDraftConfigFilePath] = useState('');
+  const [draftConfigProfile, setDraftConfigProfile] = useState('');
+
+  const refreshStatus = async () => {
+    const next = await assistantRuntimeClient.getDailyAutomationStatus();
+    setStatus(next);
+    return next;
+  };
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const rows = await invoke<AppSettingRow[]>('get_settings');
+        const settingsMap = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+        const automationStatus = await refreshStatus();
+        if (!active) return;
+
+        setDraftEnabled(
+          settingsMap.assistant_automation_enabled === 'true'
+            ? true
+            : settingsMap.assistant_automation_enabled === 'false'
+              ? false
+              : automationStatus.config.enabled,
+        );
+        setDraftLocalTime(
+          settingsMap.assistant_automation_local_time
+            ?? automationStatus.config.localTime
+            ?? '09:00',
+        );
+        setDraftConfigFilePath(
+          settingsMap.assistant_automation_config_file_path
+            ?? automationStatus.config.configFilePath
+            ?? '',
+        );
+        setDraftConfigProfile(
+          settingsMap.assistant_automation_config_profile
+            ?? automationStatus.config.configProfile
+            ?? '',
+        );
+        setDirty(false);
+      } catch (error) {
+        if (!active) return;
+        toast.error('Failed to load assistant automation settings');
+        console.error(error);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!status?.activeRun) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshStatus();
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [status?.activeRun?.runId, status?.activeRun?.status]);
+
+  const onApply = async () => {
+    setSaving(true);
+    try {
+      const normalizedTime = draftLocalTime.trim() || '09:00';
+      await invoke('update_settings', {
+        key: 'assistant_automation_enabled',
+        value: String(draftEnabled),
+      });
+      await invoke('update_settings', {
+        key: 'assistant_automation_local_time',
+        value: normalizedTime,
+      });
+      await invoke('update_settings', {
+        key: 'assistant_automation_config_file_path',
+        value: draftConfigFilePath.trim(),
+      });
+      await invoke('update_settings', {
+        key: 'assistant_automation_config_profile',
+        value: draftConfigProfile.trim(),
+      });
+
+      await refreshStatus();
+      setDirty(false);
+      toast.success('Assistant automation settings applied');
+    } catch (error) {
+      toast.error('Failed to apply assistant automation settings');
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onRunNow = async () => {
+    setRunningNow(true);
+    try {
+      await assistantRuntimeClient.runDailyAutomationNow();
+      await refreshStatus();
+      toast.success('Daily automation run queued');
+    } catch (error) {
+      toast.error('Failed to queue daily automation');
+      console.error(error);
+    } finally {
+      setRunningNow(false);
+    }
+  };
+
+  const activeStatusLabel = status?.activeRun
+    ? `${status.activeRun.status} · attempt ${status.activeRun.attemptCount}/${status.config.maxAttempts}`
+    : draftEnabled
+      ? 'Enabled'
+      : 'Disabled';
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="mb-4 text-sm font-medium">Assistant Daily Automation</h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Enabled</Label>
+              <p className="text-xs text-muted-foreground">
+                启用后，应用会在本地后台按日启动一轮 Codex 排期 proposal。
+              </p>
+            </div>
+            <Toggle
+              checked={draftEnabled}
+              disabled={loading || saving || runningNow}
+              onToggle={() => {
+                setDraftEnabled(!draftEnabled);
+                setDirty(true);
+              }}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="assistant-automation-time">Local Run Time</Label>
+            <Input
+              id="assistant-automation-time"
+              type="time"
+              value={draftLocalTime}
+              onChange={(event) => {
+                setDraftLocalTime(event.target.value);
+                setDirty(true);
+              }}
+              disabled={loading || saving || runningNow}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="assistant-automation-config-path">Codex Config File</Label>
+            <Input
+              id="assistant-automation-config-path"
+              value={draftConfigFilePath}
+              onChange={(event) => {
+                setDraftConfigFilePath(event.target.value);
+                setDirty(true);
+              }}
+              disabled={loading || saving || runningNow}
+              placeholder="留空时使用默认 Codex 配置"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="assistant-automation-profile">Codex Profile</Label>
+            <Input
+              id="assistant-automation-profile"
+              value={draftConfigProfile}
+              onChange={(event) => {
+                setDraftConfigProfile(event.target.value);
+                setDirty(true);
+              }}
+              disabled={loading || saving || runningNow}
+              placeholder="可选 profile 名称"
+            />
+          </div>
+
+          <div className="space-y-3 rounded-md border p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Worker Status</span>
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-xs',
+                  status?.activeRun?.status === 'running' && 'bg-amber-500/15 text-amber-700',
+                  status?.activeRun?.status === 'queued' && 'bg-sky-500/15 text-sky-700',
+                  !status?.activeRun && draftEnabled && 'bg-emerald-500/15 text-emerald-700',
+                  (!draftEnabled || status?.activeRun?.status === 'failed') && 'bg-slate-500/15 text-slate-700',
+                )}
+              >
+                {loading ? 'Loading...' : activeStatusLabel}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Retry policy: {status?.config.retryDelayMinutes ?? 15} min · max {status?.config.maxAttempts ?? 3} attempts
+            </p>
+            {status?.activeRun && (
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>Run ID: {status.activeRun.runId}</p>
+                <p>Scheduled For: {formatDateTime(status.activeRun.scheduledFor)}</p>
+                <p>Started At: {formatDateTime(status.activeRun.startedAt)}</p>
+                {status.activeRun.nextRetryAt && (
+                  <p>Next Retry: {formatDateTime(status.activeRun.nextRetryAt)}</p>
+                )}
+                {status.activeRun.error && (
+                  <p className="text-rose-600">{status.activeRun.error}</p>
+                )}
+              </div>
+            )}
+            {!status?.activeRun && status?.lastCompletedRun?.summary && (
+              <p className="text-xs text-muted-foreground">
+                Last Proposal: {status.lastCompletedRun.summary}
+              </p>
+            )}
+            {dirty && <p className="text-xs text-amber-600">You have unapplied changes.</p>}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={onApply}
+              disabled={loading || saving || runningNow || !dirty}
+            >
+              {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              {!saving && <RotateCw className="mr-1.5 h-4 w-4" />}
+              Apply
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void refreshStatus()}
+              disabled={loading || saving || runningNow}
+            >
+              <RotateCw className="mr-1.5 h-4 w-4" />
+              Refresh
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onRunNow}
+              disabled={loading || saving || runningNow}
+            >
+              {runningNow ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCw className="mr-1.5 h-4 w-4" />
+              )}
+              Run Now
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Recent Runs</h4>
+            {!status?.recentRuns.length && (
+              <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                当前还没有 daily automation run 记录。
+              </div>
+            )}
+            {status?.recentRuns.map((run) => (
+              <div key={run.runId} className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-medium">
+                    {run.triggerKind === 'manual' ? 'Manual Run' : `Scheduled ${run.runDate ?? ''}`}
+                  </div>
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-xs',
+                      run.status === 'completed' && 'bg-emerald-500/15 text-emerald-700',
+                      run.status === 'running' && 'bg-amber-500/15 text-amber-700',
+                      run.status === 'queued' && 'bg-sky-500/15 text-sky-700',
+                      run.status === 'failed' && 'bg-rose-500/15 text-rose-700',
+                    )}
+                  >
+                    {run.status}
+                  </span>
+                </div>
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <p>Updated: {formatDateTime(run.updatedAt)}</p>
+                  <p>Attempt: {run.attemptCount}</p>
+                  {run.summary && <p className="text-foreground/80">{run.summary}</p>}
+                  {run.error && <p className="text-rose-600">{run.error}</p>}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

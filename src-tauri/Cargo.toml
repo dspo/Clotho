@@ -11,9 +11,9 @@ members = ["crates/*"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-# Keep the existing app entrypoint stable while the framework lands separately.
 name = "clotho_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
+doctest = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -29,11 +29,13 @@ rusqlite = { version = "0.32.1", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
+async-trait = "0.1"
 base64 = "0.22"
 rmcp = { version = "0.17", features = ["server", "transport-streamable-http-server"] }
 axum = { version = "0.8", features = ["http1"] }
 tokio = { version = "1", features = ["net", "rt", "sync", "time"] }
 tokio-util = { version = "0.7" }
+toml = "0.8"
 
 [patch.crates-io]
 winres = { path = "patches/winres" }

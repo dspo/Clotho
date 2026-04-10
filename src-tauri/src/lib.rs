@@ -1,3 +1,4 @@
+mod assistant;
 mod commands;
 mod data;
 mod db;
@@ -7,7 +8,7 @@ mod models;
 mod repository;
 mod state;
 
-use state::{AppState, McpHandle};
+use state::{AppState, AssistantAutomationHandle, McpHandle};
 use std::sync::{Arc, Mutex};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Emitter, Manager};
@@ -49,6 +50,11 @@ fn load_mcp_settings(db: &rusqlite::Connection) -> (bool, String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_agent_runtime::init_with_builder(
+            tauri_plugin_agent_runtime::AgentRuntimePluginBuilder::new()
+                .config_provider(assistant::config::shared_config_provider())
+                .agent_runtime(assistant::runtime_host::build_agent_runtime())
+        ))
         .register_uri_scheme_protocol("clotho", |ctx, request| {
             let uri = request.uri();
             let host = uri.host().unwrap_or("");
@@ -103,7 +109,11 @@ pub fn run() {
                 .chars()
                 .filter(|c| c.is_ascii_alphanumeric())
                 .collect();
-            let ext = if sanitized_ext.is_empty() { "bin" } else { &sanitized_ext };
+            let ext = if sanitized_ext.is_empty() {
+                "bin"
+            } else {
+                &sanitized_ext
+            };
             let stored_filename = format!("{}.{}", image_id, ext);
 
             let images_dir = match app.path().app_data_dir() {
@@ -149,7 +159,6 @@ pub fn run() {
             {
                 Ok(resp) => resp,
                 Err(_) => {
-                    // Fallback if header construction fails (return empty body)
                     tauri::http::Response::builder()
                         .status(500)
                         .body(Vec::new())
@@ -162,18 +171,17 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("failed to resolve app data dir");
+            assistant::host_tools::configure_app_data_dir(app_data_dir.clone());
             let conn =
                 db::init::initialize_db(app_data_dir).expect("failed to initialize database");
 
             let (mcp_enabled, mcp_bind_addr) = load_mcp_settings(&conn);
 
-            // AppState for existing Tauri commands (plain, no Arc)
             let app_state_for_commands = AppState {
                 db: Mutex::new(conn),
             };
             app.manage(app_state_for_commands);
 
-            // Separate Arc<AppState> for MCP (opens a second SQLite connection for isolation)
             let mcp_app_state = Arc::new(AppState {
                 db: Mutex::new({
                     let app_data_dir2 = app
@@ -200,14 +208,45 @@ pub fn run() {
                 bind_addr: Mutex::new(mcp_bind_addr),
             });
 
+            let automation_db = {
+                let automation_app_data_dir = app
+                    .path()
+                    .app_data_dir()
+                    .expect("failed to resolve app data dir for automation");
+                db::init::initialize_db(automation_app_data_dir)
+                    .expect("failed to initialize database for automation")
+            };
+            let automation_handle = AssistantAutomationHandle {
+                db: Arc::new(Mutex::new(automation_db)),
+                trigger: Arc::new(tokio::sync::Notify::new()),
+            };
+            app.manage(automation_handle.clone());
+
+            let runtime_state = app
+                .try_state::<tauri_plugin_agent_runtime::AssistantRuntimeState>()
+                .map(|state| state.inner().clone())
+                .ok_or_else(|| {
+                    std::io::Error::other(
+                        "assistant runtime state is unavailable during automation setup",
+                    )
+                })?;
+            assistant::automation::spawn_worker(
+                app.handle().clone(),
+                runtime_state,
+                automation_handle,
+            );
+
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings…", true, Some("cmd+,"))?;
             let separator = PredefinedMenuItem::separator(app)?;
             let quit_item = PredefinedMenuItem::quit(app, Some("Quit Clotho"))?;
-            let app_submenu =
-                Submenu::with_items(app, "Clotho", true, &[&settings_item, &separator, &quit_item])?;
+            let app_submenu = Submenu::with_items(
+                app,
+                "Clotho",
+                true,
+                &[&settings_item, &separator, &quit_item],
+            )?;
 
-            // Edit menu with standard editing items
             let undo_item = PredefinedMenuItem::undo(app, Some("Undo"))?;
             let redo_item = PredefinedMenuItem::redo(app, Some("Redo"))?;
             let cut_item = PredefinedMenuItem::cut(app, Some("Cut"))?;
@@ -242,14 +281,12 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // project commands
             commands::project::list_projects,
             commands::project::get_project,
             commands::project::create_project,
             commands::project::update_project,
             commands::project::delete_project,
             commands::project::reorder_projects,
-            // task commands
             commands::task::list_tasks,
             commands::task::get_task,
             commands::task::create_task,
@@ -260,25 +297,26 @@ pub fn run() {
             commands::task::search_tasks,
             commands::task::list_task_progress,
             commands::task::add_task_progress,
-            // tag commands
             commands::tag::list_tags,
             commands::tag::create_tag,
             commands::tag::update_tag,
             commands::tag::delete_tag,
             commands::tag::add_task_tag,
             commands::tag::remove_task_tag,
-            // dependency commands
             commands::dependency::list_task_dependencies,
             commands::dependency::create_task_dependency,
             commands::dependency::delete_task_dependency,
-            // settings commands
+            commands::assistant::assistant_prepare_turn_text,
+            commands::assistant::assistant_apply_proposal,
+            commands::assistant::assistant_simulate_proposal,
+            commands::assistant::assistant_get_daily_automation_status,
+            commands::assistant::assistant_run_daily_automation_now,
+            commands::assistant::assistant_stage_local_image,
             commands::settings::get_settings,
             commands::settings::update_settings,
-            // image commands
             commands::image::upload_task_image,
             commands::image::list_task_images,
             commands::image::delete_task_image,
-            // mcp
             commands::mcp::restart_mcp_server,
             commands::mcp::get_mcp_server_status,
         ])
