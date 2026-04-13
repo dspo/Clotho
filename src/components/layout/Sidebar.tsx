@@ -33,6 +33,7 @@ import {
   FolderKanban,
   GripVertical,
   Plug,
+  Sparkles,
   Unplug,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -268,6 +269,25 @@ export function Sidebar() {
         </DndContext>
 
         <Separator className="my-1" />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={currentPath === '/assistant' ? 'secondary' : 'ghost'}
+              className={cn(
+                'w-full justify-start gap-2',
+                collapsed && 'justify-center px-0',
+              )}
+              onClick={() => navigate({ to: '/assistant' })}
+            >
+              <Sparkles className="h-4 w-4" />
+              {!collapsed && <span className="text-sm">Assistant</span>}
+            </Button>
+          </TooltipTrigger>
+          {collapsed && (
+            <TooltipContent side="right">Assistant</TooltipContent>
+          )}
+        </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>

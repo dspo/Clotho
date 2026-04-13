@@ -10,6 +10,7 @@ import { BoardPage } from './routes/board';
 import { ListPage } from './routes/list';
 import { GanttPage } from './routes/gantt';
 import { CalendarPage } from './routes/calendar';
+import { AssistantPage } from './routes/assistant';
 
 // Root route
 const rootRoute = createRootRoute({
@@ -80,6 +81,12 @@ const projectsRoute = createRoute({
   component: ProjectListPage,
 });
 
+const assistantRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/assistant',
+  component: AssistantPage,
+});
+
 // Build route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -88,6 +95,7 @@ const routeTree = rootRoute.addChildren([
   ganttRoute,
   calendarRoute,
   projectsRoute,
+  assistantRoute,
 ]);
 
 export const router = createRouter({ routeTree });
