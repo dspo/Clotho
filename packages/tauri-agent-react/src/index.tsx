@@ -7,6 +7,29 @@ import type {
   ProposalPayload,
 } from '@dspo/tauri-agent';
 
+export {
+  turnKey,
+  asRecord,
+  readString,
+  readArray,
+  readBoolean,
+  isBlockHidden,
+  getBlockTurnId,
+  statusLabel,
+} from './helpers';
+
+export { useTurnStream } from './useTurnStream';
+export type { UseTurnStreamOptions, UseTurnStreamReturn } from './useTurnStream';
+
+export { RuntimeRequestResolver, normalizeToolQuestions, normalizeElicitationFields, buildAutoResponse } from './RuntimeRequestResolver';
+export type {
+  RuntimeRequestKind,
+  RuntimeRequestResolution,
+  RuntimeRequestResolverProps,
+  ToolInputQuestion,
+  ElicitationField,
+} from './RuntimeRequestResolver';
+
 export function Transcript({ blocks }: { blocks: ConversationBlock[] }) {
   return (
     <div>
