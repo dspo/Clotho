@@ -1,13 +1,15 @@
 use clotho_domain::ProposalPayload;
 use rusqlite::Connection;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
+const MAX_PROPOSAL_CACHE_ENTRIES: usize = 128;
+
 pub struct AppState {
-    pub db: Mutex<Connection>,
-    pub proposal_cache: Mutex<HashMap<ProposalCacheKey, ProposalPayload>>,
+    pub db: Arc<Mutex<Connection>>,
+    pub proposal_cache: Mutex<ProposalCache>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -27,11 +29,46 @@ impl ProposalCacheKey {
     }
 }
 
+#[derive(Default)]
+pub struct ProposalCache {
+    entries: HashMap<ProposalCacheKey, ProposalPayload>,
+    order: VecDeque<ProposalCacheKey>,
+}
+
+impl ProposalCache {
+    pub fn get(&mut self, key: &ProposalCacheKey) -> Option<ProposalPayload> {
+        let proposal = self.entries.get(key).cloned();
+        if proposal.is_some() {
+            self.promote(key);
+        }
+        proposal
+    }
+
+    pub fn insert(&mut self, key: ProposalCacheKey, proposal: ProposalPayload) {
+        self.entries.insert(key.clone(), proposal);
+        self.promote(&key);
+
+        while self.entries.len() > MAX_PROPOSAL_CACHE_ENTRIES {
+            let Some(evicted_key) = self.order.pop_front() else {
+                break;
+            };
+            self.entries.remove(&evicted_key);
+        }
+    }
+
+    fn promote(&mut self, key: &ProposalCacheKey) {
+        if let Some(index) = self.order.iter().position(|candidate| candidate == key) {
+            self.order.remove(index);
+        }
+        self.order.push_back(key.clone());
+    }
+}
+
 impl AppState {
-    pub fn new(db: Connection) -> Self {
+    pub fn new(db: Arc<Mutex<Connection>>) -> Self {
         Self {
-            db: Mutex::new(db),
-            proposal_cache: Mutex::new(HashMap::new()),
+            db,
+            proposal_cache: Mutex::new(ProposalCache::default()),
         }
     }
 }

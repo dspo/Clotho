@@ -34,18 +34,10 @@ const DEFAULT_STATUS_EVENT = 'agent-runtime://status' as const;
 const DEFAULT_THREADS_CHANGED_EVENT = 'agent-runtime://threads-changed' as const;
 const DEFAULT_DEBUG_EVENT = 'agent-runtime://debug' as const;
 
-function toPluginConfigContext(configContext: CreateThreadRequest['configContext']) {
-  if (!configContext?.configFilePath) {
-    return null;
-  }
-  return {
-    configId: configContext.configFilePath,
-    profile: configContext.profile ?? null,
-  };
-}
-
-function fromResolvedConfig(config: {
+interface RuntimeResolvedConfigResponse {
   configId: string;
+  label: string;
+  source: string;
   configFilePath?: string | null;
   profile?: string | null;
   model: string;
@@ -61,7 +53,35 @@ function fromResolvedConfig(config: {
   personality?: string | null;
   serviceTier?: string | null;
   providerConfig?: Record<string, unknown> | null;
-}): ResolvedConfig {
+}
+
+interface RuntimeActiveTurnResponse {
+  turnId: string;
+  status: string;
+  acceptedAt: string;
+  lastSeq: number;
+  agentId?: string | null;
+  requestedAgentId?: string | null;
+  collaborationMode?: string | null;
+  routingSource?: string | null;
+}
+
+interface ThreadSnapshotResponse extends Omit<ThreadSnapshot, 'activeTurn' | 'configContext'> {
+  activeTurn: RuntimeActiveTurnResponse | null;
+  configContext: RuntimeResolvedConfigResponse | null;
+}
+
+function toPluginConfigContext(configContext: CreateThreadRequest['configContext']) {
+  if (!configContext?.configFilePath) {
+    return null;
+  }
+  return {
+    configId: configContext.configFilePath,
+    profile: configContext.profile ?? null,
+  };
+}
+
+function fromResolvedConfig(config: RuntimeResolvedConfigResponse): ResolvedConfig {
   return {
     configFilePath: config.configFilePath ?? config.configId,
     profile: config.profile ?? null,
@@ -82,7 +102,7 @@ function fromResolvedConfig(config: {
 }
 
 function normalizeActiveTurn(
-  activeTurn: ThreadSnapshot['activeTurn'],
+  activeTurn: RuntimeActiveTurnResponse | null | undefined,
 ): ThreadSnapshot['activeTurn'] {
   if (!activeTurn) {
     return null;
@@ -116,8 +136,10 @@ class AssistantRuntimeClient {
     return this.pluginCommand<ListThreadsResponse>('list_threads', req ? { ...req } : undefined);
   }
 
-  async getThreadSnapshot(threadId: string) {
-    const snapshot = await this.pluginCommand<any>('get_thread_snapshot', { threadId });
+  async getThreadSnapshot(threadId: string): Promise<ThreadSnapshot> {
+    const snapshot = await this.pluginCommand<ThreadSnapshotResponse>('get_thread_snapshot', {
+      threadId,
+    });
     return {
       ...snapshot,
       activeTurn: normalizeActiveTurn(snapshot.activeTurn),
@@ -183,7 +205,7 @@ class AssistantRuntimeClient {
   }
 
   resolveConfigProfile(req: ResolveConfigProfileRequest) {
-    return this.pluginCommand<any>('resolve_config', {
+    return this.pluginCommand<RuntimeResolvedConfigResponse>('resolve_config', {
       configId: req.configFilePath,
       profile: req.profile ?? null,
     }).then((response) => fromResolvedConfig(response));

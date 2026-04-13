@@ -17,7 +17,7 @@ const FOLLOW_UP_TURN_GUIDANCE: &str = "Follow the global SOUL and assistant poli
 const PROPOSAL_GUIDANCE: &str = "When you need to propose workspace changes, return only one JSON object. Use schema_version `clotho.assistant.proposal.v1alpha1`. Include proposal_id, thread_id, turn_id, generated_at, summary, intent, reasoning_summary, warnings, requires_confirmation, actions, and artifacts. Valid action_type values: create_task, update_task, reschedule_task, batch_update_tasks, create_dependency, delete_dependency, add_task_tag, remove_task_tag. Valid artifact_type values: routing_decision, execution_plan, analysis_report, schedule_report, task_brief, validator_notice. Encode before_json, after_json, and content_json as nested JSON objects, not strings.";
 const AUTOMATION_GUIDANCE: &str = "Automation context: produce a conservative scheduling proposal JSON object only. Do not claim that changes were applied. If information is missing, keep requires_confirmation=true and record the gaps in warnings or artifacts.";
 
-pub fn build_agent_runtime() -> AgentRuntime {
+pub fn build_agent_runtime(host_tools_provider: Arc<ClothoToolProvider>) -> AgentRuntime {
     Builder::new()
         .register_agent(clotho_assistant_agent())
         .register_provider(
@@ -25,7 +25,7 @@ pub fn build_agent_runtime() -> AgentRuntime {
                 id: "clotho-host-tools".to_string(),
                 kind: "host-tools".to_string(),
             },
-            Arc::new(ClothoToolProvider),
+            host_tools_provider,
         )
         .set_config(RuntimeConfig {
             default_permission: PermissionSet::ReadOnly,

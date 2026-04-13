@@ -24,6 +24,11 @@ const DEFAULT_MAX_ATTEMPTS: i64 = 3;
 const WORKER_POLL_INTERVAL_SECONDS: u64 = 60;
 const RUN_TIMEOUT_SECONDS: u64 = 600;
 const STALE_RUNNING_MINUTES: i64 = 30;
+const RUN_COLUMNS: &str = "
+    id, run_key, automation_kind, trigger_kind, run_date, status, attempt_count,
+    scheduled_for, started_at, completed_at, next_retry_at, thread_id, turn_id,
+    proposal_id, summary, error, updated_at
+";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -402,27 +407,27 @@ fn load_status(db: &rusqlite::Connection) -> Result<DailyAutomationStatus, AppEr
     let config = load_config(db)?;
     let active_run = load_single_run(
         db,
-        "
-        SELECT id, run_key, automation_kind, trigger_kind, run_date, status, attempt_count,
-               scheduled_for, started_at, completed_at, next_retry_at, thread_id, turn_id,
-               proposal_id, summary, error, updated_at
-        FROM assistant_automation_runs
-        WHERE status IN ('queued', 'running')
-        ORDER BY updated_at DESC
-        LIMIT 1
-        ",
+        &format!(
+            "
+            SELECT {RUN_COLUMNS}
+            FROM assistant_automation_runs
+            WHERE status IN ('queued', 'running')
+            ORDER BY updated_at DESC
+            LIMIT 1
+            "
+        ),
     )?;
     let last_completed_run = load_single_run(
         db,
-        "
-        SELECT id, run_key, automation_kind, trigger_kind, run_date, status, attempt_count,
-               scheduled_for, started_at, completed_at, next_retry_at, thread_id, turn_id,
-               proposal_id, summary, error, updated_at
-        FROM assistant_automation_runs
-        WHERE status = 'completed'
-        ORDER BY completed_at DESC, updated_at DESC
-        LIMIT 1
-        ",
+        &format!(
+            "
+            SELECT {RUN_COLUMNS}
+            FROM assistant_automation_runs
+            WHERE status = 'completed'
+            ORDER BY completed_at DESC, updated_at DESC
+            LIMIT 1
+            "
+        ),
     )?;
     let recent_runs = load_recent_runs(db, 12)?;
 
@@ -438,16 +443,14 @@ fn load_recent_runs(
     db: &rusqlite::Connection,
     limit: usize,
 ) -> Result<Vec<DailyAutomationRun>, AppError> {
-    let mut stmt = db.prepare(
+    let mut stmt = db.prepare(&format!(
         "
-        SELECT id, run_key, automation_kind, trigger_kind, run_date, status, attempt_count,
-               scheduled_for, started_at, completed_at, next_retry_at, thread_id, turn_id,
-               proposal_id, summary, error, updated_at
+        SELECT {RUN_COLUMNS}
         FROM assistant_automation_runs
         ORDER BY updated_at DESC
         LIMIT ?1
-        ",
-    )?;
+        "
+    ))?;
     let rows = stmt.query_map([limit as i64], map_run_row)?;
     let mut items = Vec::new();
     for row in rows {
@@ -607,14 +610,11 @@ fn ensure_scheduled_run_for_today(
 
     let run_date = now.format("%Y-%m-%d").to_string();
     let run_key = format!("daily:{AUTOMATION_KIND_DAILY_SCHEDULER}:{run_date}");
-    let exists = db
-        .query_row(
-            "SELECT COUNT(*) FROM assistant_automation_runs WHERE run_key = ?1",
-            [run_key.as_str()],
-            |row| row.get::<_, i64>(0),
-        )
-        .unwrap_or(0)
-        > 0;
+    let exists = db.query_row(
+        "SELECT COUNT(*) FROM assistant_automation_runs WHERE run_key = ?1",
+        [run_key.as_str()],
+        |row| row.get::<_, i64>(0),
+    )? > 0;
     if exists {
         return Ok(());
     }
@@ -660,17 +660,15 @@ fn insert_manual_run(db: &rusqlite::Connection) -> Result<String, AppError> {
 }
 
 fn claim_queued_run(db: &rusqlite::Connection) -> Result<Option<DailyAutomationRun>, AppError> {
-    let mut stmt = db.prepare(
+    let mut stmt = db.prepare(&format!(
         "
-        SELECT id, run_key, automation_kind, trigger_kind, run_date, status, attempt_count,
-               scheduled_for, started_at, completed_at, next_retry_at, thread_id, turn_id,
-               proposal_id, summary, error, updated_at
+        SELECT {RUN_COLUMNS}
         FROM assistant_automation_runs
         WHERE status = 'queued'
         ORDER BY created_at ASC
         LIMIT 1
-        ",
-    )?;
+        "
+    ))?;
     let mut rows = stmt.query([])?;
     let Some(row) = rows.next()? else {
         return Ok(None);
@@ -699,11 +697,9 @@ fn claim_retryable_failed_run(
     config: &DailyAutomationConfig,
 ) -> Result<Option<DailyAutomationRun>, AppError> {
     let now = Utc::now().to_rfc3339();
-    let mut stmt = db.prepare(
+    let mut stmt = db.prepare(&format!(
         "
-        SELECT id, run_key, automation_kind, trigger_kind, run_date, status, attempt_count,
-               scheduled_for, started_at, completed_at, next_retry_at, thread_id, turn_id,
-               proposal_id, summary, error, updated_at
+        SELECT {RUN_COLUMNS}
         FROM assistant_automation_runs
         WHERE status = 'failed'
           AND attempt_count < ?1
@@ -711,8 +707,8 @@ fn claim_retryable_failed_run(
           AND next_retry_at <= ?2
         ORDER BY next_retry_at ASC
         LIMIT 1
-        ",
-    )?;
+        "
+    ))?;
     let mut rows = stmt.query(rusqlite::params![config.max_attempts, now])?;
     let Some(row) = rows.next()? else {
         return Ok(None);
@@ -739,16 +735,14 @@ fn load_run_by_id(
     db: &rusqlite::Connection,
     run_id: &str,
 ) -> Result<Option<DailyAutomationRun>, AppError> {
-    let mut stmt = db.prepare(
+    let mut stmt = db.prepare(&format!(
         "
-        SELECT id, run_key, automation_kind, trigger_kind, run_date, status, attempt_count,
-               scheduled_for, started_at, completed_at, next_retry_at, thread_id, turn_id,
-               proposal_id, summary, error, updated_at
+        SELECT {RUN_COLUMNS}
         FROM assistant_automation_runs
         WHERE id = ?1
         LIMIT 1
-        ",
-    )?;
+        "
+    ))?;
     let mut rows = stmt.query([run_id])?;
     if let Some(row) = rows.next()? {
         Ok(Some(map_run_row(row)?))

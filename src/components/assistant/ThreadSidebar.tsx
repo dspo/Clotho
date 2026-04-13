@@ -69,10 +69,10 @@ export function ThreadSidebar({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              <h2 className="truncate text-sm font-semibold">Assistant Threads</h2>
+              <h2 className="truncate text-sm font-semibold">助手对话</h2>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Runtime {connectionState === 'connected' ? 'connected' : connectionState}
+              Runtime {connectionState === 'connected' ? '已连接' : connectionState}
             </p>
           </div>
           <Button size="icon-sm" variant="outline" onClick={onCreateThread}>

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::io;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use async_trait::async_trait;
@@ -13,23 +13,40 @@ use tauri_plugin_agent_runtime::{
     AgentError, ExecutionMode, FunctionToolDefinition, PermissionSet, RuntimeContext, ToolContext,
     ToolProvider, Visibility,
 };
-
-use crate::db;
-
 const DEFAULT_LIMIT: usize = 50;
 
-static HOST_TOOLS_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
+#[derive(Default)]
+pub struct ClothoToolProvider {
+    db: OnceLock<Arc<Mutex<Connection>>>,
+}
 
-pub struct ClothoToolProvider;
+impl ClothoToolProvider {
+    pub fn configure_connection(&self, db: Arc<Mutex<Connection>>) -> io::Result<()> {
+        if let Some(existing) = self.db.get() {
+            if Arc::ptr_eq(existing, &db) {
+                return Ok(());
+            }
+            return Err(io::Error::other(
+                "assistant host-tools database was configured more than once",
+            ));
+        }
 
-pub fn configure_app_data_dir(app_data_dir: PathBuf) {
-    if HOST_TOOLS_DB.get().is_some() {
-        return;
+        self.db.set(db).map_err(|_| {
+            io::Error::other("assistant host-tools database was configured more than once")
+        })
     }
 
-    let connection = db::init::initialize_db(app_data_dir)
-        .expect("failed to initialize assistant host-tools database");
-    let _ = HOST_TOOLS_DB.set(Arc::new(Mutex::new(connection)));
+    fn lock_connection(&self) -> Result<MutexGuard<'_, Connection>, AgentError> {
+        self.db
+            .get()
+            .ok_or_else(|| {
+                AgentError::Execution("assistant host-tools database is unavailable".to_string())
+            })?
+            .lock()
+            .map_err(|_| {
+                AgentError::Execution("assistant host-tools database lock poisoned".to_string())
+            })
+    }
 }
 
 #[async_trait]
@@ -146,7 +163,7 @@ impl ToolProvider for ClothoToolProvider {
         tool_id: &str,
         input: Value,
     ) -> Result<Value, AgentError> {
-        let conn = lock_connection()?;
+        let conn = self.lock_connection()?;
         match tool_id {
             "get_project" => get_project(&conn, &required_string(&input, "id")?),
             "list_projects" => list_projects(
@@ -182,18 +199,6 @@ impl ToolProvider for ClothoToolProvider {
             ))),
         }
     }
-}
-
-fn lock_connection() -> Result<MutexGuard<'static, Connection>, AgentError> {
-    HOST_TOOLS_DB
-        .get()
-        .ok_or_else(|| {
-            AgentError::Execution("assistant host-tools database is unavailable".to_string())
-        })?
-        .lock()
-        .map_err(|_| {
-            AgentError::Execution("assistant host-tools database lock poisoned".to_string())
-        })
 }
 
 fn spec(id: &str, description: &str, input_schema: Value) -> FunctionToolDefinition {

@@ -48,12 +48,15 @@ fn load_mcp_settings(db: &rusqlite::Connection) -> (bool, String) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let host_tools_provider = Arc::new(assistant::host_tools::ClothoToolProvider::default());
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_agent_runtime::init_with_builder(
             tauri_plugin_agent_runtime::AgentRuntimePluginBuilder::new()
                 .config_provider(assistant::config::shared_config_provider())
-                .agent_runtime(assistant::runtime_host::build_agent_runtime()),
+                .agent_runtime(assistant::runtime_host::build_agent_runtime(
+                    host_tools_provider.clone(),
+                )),
         ))
         .register_uri_scheme_protocol("clotho", |ctx, request| {
             let uri = request.uri();
@@ -164,18 +167,19 @@ pub fn run() {
                     .unwrap(),
             }
         })
-        .setup(|app| {
+        .setup(move |app| {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
                 .expect("failed to resolve app data dir");
-            assistant::host_tools::configure_app_data_dir(app_data_dir.clone());
             let conn =
                 db::init::initialize_db(app_data_dir).expect("failed to initialize database");
 
             let (mcp_enabled, mcp_bind_addr) = load_mcp_settings(&conn);
 
-            let app_state_for_commands = AppState::new(conn);
+            let shared_db = Arc::new(Mutex::new(conn));
+            host_tools_provider.configure_connection(shared_db.clone())?;
+            let app_state_for_commands = AppState::new(shared_db);
             app.manage(app_state_for_commands);
 
             let mcp_app_state = Arc::new(AppState::new({
@@ -183,8 +187,10 @@ pub fn run() {
                     .path()
                     .app_data_dir()
                     .expect("failed to resolve app data dir");
-                db::init::initialize_db(app_data_dir2)
-                    .expect("failed to initialize database for mcp")
+                Arc::new(Mutex::new(
+                    db::init::initialize_db(app_data_dir2)
+                        .expect("failed to initialize database for mcp"),
+                ))
             }));
 
             let initial_token: Option<CancellationToken> = if mcp_enabled {

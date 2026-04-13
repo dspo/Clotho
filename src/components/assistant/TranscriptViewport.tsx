@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ConversationBlock, ProposalPayload } from '@/types/assistant-runtime';
 import { Button } from '@/components/ui/button';
 import { type PendingRuntimeRequestView } from '@/stores/assistant/helpers';
@@ -34,8 +34,9 @@ export function TranscriptViewport({
 }: TranscriptViewportProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [followTail, setFollowTail] = useState(true);
-  const requestMap = new Map(
-    pendingRequests.map((request) => [request.requestId, request] as const),
+  const requestMap = useMemo(
+    () => new Map(pendingRequests.map((request) => [request.requestId, request] as const)),
+    [pendingRequests],
   );
 
   useEffect(() => {
@@ -73,7 +74,7 @@ export function TranscriptViewport({
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
           {!threadId && (
             <div className="rounded-2xl border border-dashed px-6 py-10 text-center">
-              <h3 className="text-lg font-semibold">Assistant</h3>
+              <h3 className="text-lg font-semibold">助手</h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 选择一个 thread，或者直接发送消息创建新对话。
               </p>

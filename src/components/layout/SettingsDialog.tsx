@@ -385,7 +385,7 @@ function AssistantAutomationPanel() {
         setDirty(false);
       } catch (error) {
         if (!active) return;
-        toast.error('Failed to load assistant automation settings');
+        toast.error('加载助手自动化设置失败');
         console.error(error);
       } finally {
         if (active) setLoading(false);
@@ -432,9 +432,9 @@ function AssistantAutomationPanel() {
 
       await refreshStatus();
       setDirty(false);
-      toast.success('Assistant automation settings applied');
+      toast.success('助手自动化设置已应用');
     } catch (error) {
-      toast.error('Failed to apply assistant automation settings');
+      toast.error('应用助手自动化设置失败');
       console.error(error);
     } finally {
       setSaving(false);
@@ -446,9 +446,9 @@ function AssistantAutomationPanel() {
     try {
       await assistantRuntimeClient.runDailyAutomationNow();
       await refreshStatus();
-      toast.success('Daily automation run queued');
+      toast.success('每日自动化任务已加入队列');
     } catch (error) {
-      toast.error('Failed to queue daily automation');
+      toast.error('加入每日自动化任务队列失败');
       console.error(error);
     } finally {
       setRunningNow(false);
@@ -456,19 +456,19 @@ function AssistantAutomationPanel() {
   };
 
   const activeStatusLabel = status?.activeRun
-    ? `${status.activeRun.status} · attempt ${status.activeRun.attemptCount}/${status.config.maxAttempts}`
+    ? `${status.activeRun.status} · 第 ${status.activeRun.attemptCount}/${status.config.maxAttempts} 次尝试`
     : draftEnabled
-      ? 'Enabled'
-      : 'Disabled';
+      ? '已启用'
+      : '已停用';
 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="mb-4 text-sm font-medium">Assistant Daily Automation</h3>
+        <h3 className="mb-4 text-sm font-medium">助手每日自动化</h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <Label>Enabled</Label>
+              <Label>启用</Label>
               <p className="text-xs text-muted-foreground">
                 启用后，应用会在本地后台按日启动一轮 Codex 排期 proposal。
               </p>
@@ -484,7 +484,7 @@ function AssistantAutomationPanel() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="assistant-automation-time">Local Run Time</Label>
+              <Label htmlFor="assistant-automation-time">本地运行时间</Label>
             <Input
               id="assistant-automation-time"
               type="time"
@@ -498,7 +498,7 @@ function AssistantAutomationPanel() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="assistant-automation-config-path">Codex Config File</Label>
+              <Label htmlFor="assistant-automation-config-path">Codex 配置文件</Label>
             <Input
               id="assistant-automation-config-path"
               value={draftConfigFilePath}
@@ -527,7 +527,7 @@ function AssistantAutomationPanel() {
 
           <div className="space-y-3 rounded-md border p-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Worker Status</span>
+              <span className="text-sm text-muted-foreground">Worker 状态</span>
               <span
                 className={cn(
                   'rounded-full px-2 py-0.5 text-xs',
@@ -537,19 +537,19 @@ function AssistantAutomationPanel() {
                   (!draftEnabled || status?.activeRun?.status === 'failed') && 'bg-slate-500/15 text-slate-700',
                 )}
               >
-                {loading ? 'Loading...' : activeStatusLabel}
+                {loading ? '加载中…' : activeStatusLabel}
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Retry policy: {status?.config.retryDelayMinutes ?? 15} min · max {status?.config.maxAttempts ?? 3} attempts
+              重试策略：{status?.config.retryDelayMinutes ?? 15} 分钟 · 最多 {status?.config.maxAttempts ?? 3} 次
             </p>
             {status?.activeRun && (
               <div className="space-y-1 text-xs text-muted-foreground">
-                <p>Run ID: {status.activeRun.runId}</p>
-                <p>Scheduled For: {formatDateTime(status.activeRun.scheduledFor)}</p>
-                <p>Started At: {formatDateTime(status.activeRun.startedAt)}</p>
+                <p>运行 ID：{status.activeRun.runId}</p>
+                <p>计划时间：{formatDateTime(status.activeRun.scheduledFor)}</p>
+                <p>开始时间：{formatDateTime(status.activeRun.startedAt)}</p>
                 {status.activeRun.nextRetryAt && (
-                  <p>Next Retry: {formatDateTime(status.activeRun.nextRetryAt)}</p>
+                  <p>下次重试：{formatDateTime(status.activeRun.nextRetryAt)}</p>
                 )}
                 {status.activeRun.error && (
                   <p className="text-rose-600">{status.activeRun.error}</p>
@@ -558,10 +558,10 @@ function AssistantAutomationPanel() {
             )}
             {!status?.activeRun && status?.lastCompletedRun?.summary && (
               <p className="text-xs text-muted-foreground">
-                Last Proposal: {status.lastCompletedRun.summary}
+                最近提案：{status.lastCompletedRun.summary}
               </p>
             )}
-            {dirty && <p className="text-xs text-amber-600">You have unapplied changes.</p>}
+            {dirty && <p className="text-xs text-amber-600">当前有尚未应用的变更。</p>}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -572,7 +572,7 @@ function AssistantAutomationPanel() {
             >
               {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
               {!saving && <RotateCw className="mr-1.5 h-4 w-4" />}
-              Apply
+              应用
             </Button>
             <Button
               variant="outline"
@@ -581,7 +581,7 @@ function AssistantAutomationPanel() {
               disabled={loading || saving || runningNow}
             >
               <RotateCw className="mr-1.5 h-4 w-4" />
-              Refresh
+              刷新
             </Button>
             <Button
               variant="secondary"
@@ -594,12 +594,12 @@ function AssistantAutomationPanel() {
               ) : (
                 <RotateCw className="mr-1.5 h-4 w-4" />
               )}
-              Run Now
+              立即运行
             </Button>
           </div>
 
           <div className="space-y-2">
-            <h4 className="text-sm font-medium">Recent Runs</h4>
+              <h4 className="text-sm font-medium">最近运行</h4>
             {!status?.recentRuns.length && (
               <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
                 当前还没有 daily automation run 记录。
@@ -609,7 +609,7 @@ function AssistantAutomationPanel() {
               <div key={run.runId} className="rounded-md border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-sm font-medium">
-                    {run.triggerKind === 'manual' ? 'Manual Run' : `Scheduled ${run.runDate ?? ''}`}
+                    {run.triggerKind === 'manual' ? '手动运行' : `计划运行 ${run.runDate ?? ''}`}
                   </div>
                   <span
                     className={cn(
@@ -624,8 +624,8 @@ function AssistantAutomationPanel() {
                   </span>
                 </div>
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                  <p>Updated: {formatDateTime(run.updatedAt)}</p>
-                  <p>Attempt: {run.attemptCount}</p>
+                  <p>更新时间：{formatDateTime(run.updatedAt)}</p>
+                  <p>尝试次数：{run.attemptCount}</p>
                   {run.summary && <p className="text-foreground/80">{run.summary}</p>}
                   {run.error && <p className="text-rose-600">{run.error}</p>}
                 </div>

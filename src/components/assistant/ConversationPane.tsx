@@ -76,7 +76,7 @@ export function ConversationPane({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="truncate text-sm font-semibold">
-                {threadTitle ?? 'Assistant'}
+                {threadTitle ?? '助手'}
               </h1>
               {isRunning && <LoaderCircle className="h-4 w-4 animate-spin text-primary" />}
             </div>

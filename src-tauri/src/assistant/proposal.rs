@@ -251,3 +251,137 @@ fn take_nested_json(object: &mut Map<String, Value>, keys: &[&str]) -> Option<Va
         other => Some(other),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::extract_proposal_from_message;
+    use clotho_domain::PROPOSAL_SCHEMA_VERSION;
+
+    #[test]
+    fn extracts_canonical_proposal_from_camel_case_code_fence() {
+        let message = r#"
+```json
+{
+  "summary": "Reschedule overdue work",
+  "intent": "Keep the plan realistic",
+  "warnings": ["Needs confirmation"],
+  "requiresConfirmation": false,
+  "actions": [
+    {
+      "actionType": "update_task",
+      "title": "Move task",
+      "summary": "Push due date back",
+      "targetId": "task-1",
+      "afterJson": { "dueDate": "2026-04-14" }
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactType": "execution_plan",
+      "title": "Plan",
+      "contentJson": { "steps": ["review", "update"] }
+    }
+  ]
+}
+```
+"#;
+
+        let extracted =
+            extract_proposal_from_message(message, "thread-1", "turn-1").expect("proposal");
+
+        assert_eq!(extracted.proposal.schema_version, PROPOSAL_SCHEMA_VERSION);
+        assert_eq!(extracted.proposal.thread_id, "thread-1");
+        assert_eq!(extracted.proposal.turn_id, "turn-1");
+        assert_eq!(extracted.proposal.summary, "Reschedule overdue work");
+        assert_eq!(extracted.proposal.intent, "Keep the plan realistic");
+        assert_eq!(extracted.proposal.warnings, vec!["Needs confirmation"]);
+        assert!(!extracted.proposal.requires_confirmation);
+        assert_eq!(extracted.proposal.actions.len(), 1);
+        assert_eq!(
+            extracted.proposal.actions[0].target_id.as_deref(),
+            Some("task-1")
+        );
+        assert_eq!(
+            extracted.proposal.actions[0].after_json,
+            json!({ "dueDate": "2026-04-14" })
+        );
+        assert_eq!(extracted.proposal.artifacts.len(), 1);
+        assert_eq!(
+            extracted.proposal.artifacts[0].content_json,
+            json!({ "steps": ["review", "update"] })
+        );
+        assert!(!extracted.proposal.proposal_id.is_empty());
+        assert!(!extracted.proposal.generated_at.is_empty());
+    }
+
+    #[test]
+    fn extracts_snake_case_payload_and_unwraps_nested_json_strings() {
+        let message = r#"
+Before the proposal:
+{
+  "summary": "Apply dependency fix",
+  "intent": "Preserve ordering",
+  "reasoning_summary": "Need the dependency to reflect the latest task state",
+  "actions": [
+    {
+      "action_type": "create_dependency",
+      "title": "Add dependency",
+      "summary": "Create dependency between tasks",
+      "before_json": "{\"old\":true}",
+      "after_json": "{\"predecessorId\":\"task-1\",\"successorId\":\"task-2\"}"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_type": "analysis_report",
+      "title": "Reasoning",
+      "content_json": "{\"confidence\":\"high\"}"
+    }
+  ]
+}
+"#;
+
+        let extracted =
+            extract_proposal_from_message(message, "thread-2", "turn-2").expect("proposal");
+
+        assert_eq!(
+            extracted.proposal.reasoning_summary.as_deref(),
+            Some("Need the dependency to reflect the latest task state")
+        );
+        assert_eq!(
+            extracted.proposal.actions[0].before_json,
+            Some(json!({ "old": true }))
+        );
+        assert_eq!(
+            extracted.proposal.actions[0].after_json,
+            json!({ "predecessorId": "task-1", "successorId": "task-2" })
+        );
+        assert_eq!(
+            extracted.proposal.artifacts[0].content_json,
+            json!({ "confidence": "high" })
+        );
+    }
+
+    #[test]
+    fn defaults_missing_optional_fields_for_minimal_payload() {
+        let message = r#"{"summary":"Triage tasks","intent":"Summarize project state"}"#;
+        let extracted =
+            extract_proposal_from_message(message, "thread-3", "turn-3").expect("proposal");
+
+        assert_eq!(extracted.proposal.thread_id, "thread-3");
+        assert_eq!(extracted.proposal.turn_id, "turn-3");
+        assert_eq!(extracted.proposal.warnings, Vec::<String>::new());
+        assert!(extracted.proposal.requires_confirmation);
+        assert!(extracted.proposal.actions.is_empty());
+        assert!(extracted.proposal.artifacts.is_empty());
+        assert_eq!(extracted.proposal.reasoning_summary, None);
+    }
+
+    #[test]
+    fn rejects_payload_without_required_summary() {
+        let message = r#"{"intent":"Summarize project state"}"#;
+        assert!(extract_proposal_from_message(message, "thread-4", "turn-4").is_none());
+    }
+}

@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::assistant::{automation, proposal};
 use crate::commands::lock_db;
 use crate::error::AppError;
-use crate::state::{AppState, AssistantAutomationHandle, ProposalCacheKey};
+use crate::state::{AppState, AssistantAutomationHandle, ProposalCache, ProposalCacheKey};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -290,10 +290,8 @@ fn load_cached_proposal(
     turn_id: &str,
     proposal_id: &str,
 ) -> Result<Option<ProposalPayload>, AppError> {
-    let cache = lock_proposal_cache(state)?;
-    Ok(cache
-        .get(&ProposalCacheKey::new(thread_id, turn_id, proposal_id))
-        .cloned())
+    let mut cache = lock_proposal_cache(state)?;
+    Ok(cache.get(&ProposalCacheKey::new(thread_id, turn_id, proposal_id)))
 }
 
 fn cache_proposal(state: &AppState, proposal: ProposalPayload) -> Result<(), AppError> {
@@ -309,10 +307,7 @@ fn cache_proposal(state: &AppState, proposal: ProposalPayload) -> Result<(), App
 
 fn lock_proposal_cache(
     state: &AppState,
-) -> Result<
-    std::sync::MutexGuard<'_, std::collections::HashMap<ProposalCacheKey, ProposalPayload>>,
-    AppError,
-> {
+) -> Result<std::sync::MutexGuard<'_, ProposalCache>, AppError> {
     state
         .proposal_cache
         .lock()
@@ -389,7 +384,7 @@ fn path_to_string(path: &PathBuf) -> Result<String, AppError> {
 }
 
 fn io_error(error: std::io::Error) -> AppError {
-    AppError::InvalidInput(error.to_string())
+    AppError::Runtime(error.to_string())
 }
 
 #[cfg(test)]
